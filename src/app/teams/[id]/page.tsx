@@ -21,6 +21,13 @@ export default function TeamPage() {
   const [newPlayerName, setNewPlayerName] = useState('')
   const [newPlayerNumber, setNewPlayerNumber] = useState('')
   const [addingPlayer, setAddingPlayer] = useState(false)
+  // 写真登録
+  const [extracting, setExtracting] = useState(false)
+  const [extractProgress, setExtractProgress] = useState('')
+  const [extractError, setExtractError] = useState('')
+  const [extractedTeamName, setExtractedTeamName] = useState('')
+  const [extractedPlayers, setExtractedPlayers] = useState<{ number: string; name: string; selected: boolean }[]>([])
+  const [savingExtracted, setSavingExtracted] = useState(false)
 
   useEffect(() => { loadData() }, [id])
 
@@ -58,11 +65,72 @@ export default function TeamPage() {
     setAddingPlayer(false)
   }
 
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setExtractError('')
+    setExtractedPlayers([])
+    setExtractedTeamName('')
+    setExtracting(true)
+    setExtractProgress('AIが読み取り中...')
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      const res = await fetch('/api/extract-players', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) {
+        setExtractError(data.error ?? '読み取りに失敗しました')
+      } else {
+        const list = (data.players as { number: string; name: string }[]) ?? []
+        setExtractedTeamName(data.team_name ?? '')
+        setExtractedPlayers(list.map(p => ({ ...p, selected: true })))
+        if (list.length === 0) setExtractError('選手データが見つかりませんでした。手動で入力してください。')
+      }
+    } catch {
+      setExtractError('通信エラーが発生しました')
+    }
+    setExtractProgress('')
+    setExtracting(false)
+  }
+
+  async function saveExtractedPlayers() {
+    const toAdd = extractedPlayers.filter(p => p.selected && p.name.trim())
+    if (toAdd.length === 0) return
+    setSavingExtracted(true)
+    const supabase = createClient()
+    const rows = toAdd.map(p => ({ team_id: id, name: p.name.trim(), number: p.number.trim() }))
+    const { data } = await supabase.from('players').insert(rows).select()
+    if (data) {
+      setPlayers(prev => [...prev, ...data].sort((a, b) => Number(a.number) - Number(b.number)))
+    }
+    setExtractedPlayers([])
+    setSavingExtracted(false)
+  }
+
   async function deletePlayer(playerId: string) {
     if (!confirm('選手を削除しますか？記録されたスタッツも削除されます。')) return
     const supabase = createClient()
     await supabase.from('players').delete().eq('id', playerId)
     setPlayers(prev => prev.filter(p => p.id !== playerId))
+  }
+
+  async function deleteGame(gameId: string) {
+    if (!confirm('この試合を削除しますか？スタッツのデータもすべて削除されます。')) return
+    const supabase = createClient()
+    await supabase.from('player_stats').delete().eq('game_id', gameId)
+    await supabase.from('games').delete().eq('id', gameId)
+    setGames(prev => prev.filter(g => g.id !== gameId))
+    // localStorage のキャッシュも削除
+    ;['pending', 'score_events', 'court', 'court_opp', 'scoresheet_ov'].forEach(k => {
+      localStorage.removeItem(`${k}_${gameId}`)
+    })
+    for (let q = 1; q <= 4; q++) {
+      localStorage.removeItem(`court_q${q}_${gameId}`)
+      localStorage.removeItem(`court_opp_q${q}_${gameId}`)
+    }
+    localStorage.removeItem(`game_${gameId}_home_players`)
+    localStorage.removeItem(`game_${gameId}_opponent_players`)
   }
 
   function copyShareLink() {
@@ -91,16 +159,16 @@ export default function TeamPage() {
 
   return (
     <div className="min-h-screen">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
-        <Link href="/dashboard" className="flex items-center gap-2 text-white">
-          <span>←</span>
-          <span className="font-bold">🏀 {team.name}</span>
+      <nav className="flex items-center gap-2 px-4 py-3 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
+        <Link href="/dashboard" className="flex items-center gap-2 text-white min-w-0 flex-1">
+          <span className="flex-shrink-0">←</span>
+          <span className="font-bold truncate">🏀 {team.name}</span>
         </Link>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <button onClick={copyShareLink} className="btn-secondary text-sm py-2 px-3">
-            {shareMsg || '🔗 共有'}
+            {shareMsg || '共有'}
           </button>
-          <button onClick={handleExportCSV} className="btn-secondary text-sm py-2 px-3">📥 CSV</button>
+          <button onClick={handleExportCSV} className="btn-secondary text-sm py-2 px-3">CSV</button>
         </div>
       </nav>
 
@@ -123,31 +191,40 @@ export default function TeamPage() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold text-white">試合一覧</h2>
-              <Link href={`/games/new?team=${id}`} className="btn-primary text-sm py-2 px-4">+ 試合を追加</Link>
+              <Link href={`/games/new?team=${id}`} className="btn-primary text-sm py-2 px-4">試合を登録</Link>
             </div>
             {games.length === 0 ? (
               <div className="card text-center py-12">
                 <p className="text-[var(--muted)] mb-4">試合がまだありません</p>
-                <Link href={`/games/new?team=${id}`} className="btn-primary">最初の試合を記録する</Link>
+                <Link href={`/games/new?team=${id}`} className="btn-primary">最初の試合を登録する</Link>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 {games.map(game => (
-                  <Link key={game.id} href={`/games/${game.id}`} className="card flex items-center justify-between hover:border-orange-500/50 transition-colors">
-                    <div>
-                      <div className="font-medium text-white">vs {game.opponent}</div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {format(new Date(game.game_date), 'M月d日（E）', { locale: ja })}
-                        {game.location ? ` · ${game.location}` : ''}
+                  <div key={game.id} className="card flex items-center gap-2 hover:border-orange-500/50 transition-colors p-0">
+                    <Link href={`/games/${game.id}`} className="flex items-center justify-between flex-1 min-w-0 p-4">
+                      <div className="min-w-0">
+                        <div className="font-medium text-white">vs {game.opponent}</div>
+                        <div className="text-sm text-[var(--muted)] truncate">
+                          {format(new Date(game.game_date), 'M月d日（E）', { locale: ja })}
+                          {game.location ? ` · ${game.location}` : ''}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${game.our_score > game.opponent_score ? 'text-green-400' : game.our_score < game.opponent_score ? 'text-red-400' : 'text-white'}`}>
-                        {game.our_score} - {game.opponent_score}
+                      <div className="text-right ml-3 flex-shrink-0">
+                        <div className={`text-lg font-bold ${game.our_score > game.opponent_score ? 'text-green-400' : game.our_score < game.opponent_score ? 'text-red-400' : 'text-white'}`}>
+                          {game.our_score} - {game.opponent_score}
+                        </div>
+                        <div className="text-xs text-[var(--muted)]">{game.is_finished ? '終了' : '進行中'}</div>
                       </div>
-                      <div className="text-xs text-[var(--muted)]">{game.is_finished ? '終了' : '進行中'}</div>
-                    </div>
-                  </Link>
+                    </Link>
+                    <button
+                      onClick={() => deleteGame(game.id)}
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg mr-2 text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm"
+                      title="試合を削除"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -158,6 +235,82 @@ export default function TeamPage() {
         {tab === 'players' && (
           <div>
             <h2 className="font-semibold text-white mb-4">選手登録</h2>
+
+            {/* 写真から一括登録 */}
+            <div className="card mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="text-sm font-semibold text-white">📷 写真から一括登録</div>
+                  <div className="text-xs text-[var(--muted)] mt-0.5">公式記録用紙の写真を撮って選手を自動登録</div>
+                </div>
+                <label className={`btn-primary text-sm py-2 px-4 cursor-pointer ${extracting ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {extracting ? '処理中...' : '写真を選択'}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} disabled={extracting} />
+                </label>
+              </div>
+              {extracting && extractProgress && (
+                <p className="text-orange-400 text-xs mt-2 animate-pulse">{extractProgress}</p>
+              )}
+              {extractError && <p className="text-red-400 text-xs mt-1">{extractError}</p>}
+              {extractedPlayers.length > 0 && (
+                <div className="mt-3 border-t border-[var(--card-border)] pt-3">
+                  {/* チーム名 */}
+                  {extractedTeamName && (
+                    <div className="flex items-center gap-2 mb-3 bg-orange-500/10 border border-orange-500/30 rounded-lg px-3 py-2">
+                      <span className="text-xs text-[var(--muted)]">読み取ったチーム名:</span>
+                      <span className="text-orange-400 font-bold">{extractedTeamName}</span>
+                    </div>
+                  )}
+                  {/* ヘッダー */}
+                  <div className="flex items-center gap-2 mb-1.5 px-1">
+                    <div className="w-4" />
+                    <div className="w-16 text-xs text-[var(--muted)] text-center">背番号</div>
+                    <div className="flex-1 text-xs text-[var(--muted)]">選手名</div>
+                    <div className="w-6" />
+                  </div>
+                  <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto mb-3">
+                    {extractedPlayers.map((p, i) => (
+                      <div key={i} className={`flex items-center gap-2 rounded-lg px-1 py-0.5 ${p.selected ? '' : 'opacity-40'}`}>
+                        <input
+                          type="checkbox"
+                          checked={p.selected}
+                          onChange={e => setExtractedPlayers(prev => prev.map((x, j) => j === i ? { ...x, selected: e.target.checked } : x))}
+                          className="w-4 h-4 accent-orange-500 flex-shrink-0"
+                        />
+                        <input
+                          type="text"
+                          value={p.number}
+                          onChange={e => setExtractedPlayers(prev => prev.map((x, j) => j === i ? { ...x, number: e.target.value } : x))}
+                          placeholder="—"
+                          className="input-field w-16 text-center text-orange-400 font-bold px-1 py-1.5 text-sm"
+                          maxLength={3}
+                        />
+                        <input
+                          type="text"
+                          value={p.name}
+                          onChange={e => setExtractedPlayers(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                          placeholder="選手名"
+                          className="input-field flex-1 py-1.5 text-sm"
+                        />
+                        <button onClick={() => setExtractedPlayers(prev => prev.filter((_, j) => j !== i))} className="text-[var(--muted)] hover:text-red-400 text-sm w-6 flex-shrink-0">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs text-[var(--muted)] mb-2">誤認識がある場合は直接編集できます</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={saveExtractedPlayers}
+                      disabled={savingExtracted || extractedPlayers.every(p => !p.selected)}
+                      className="btn-primary text-sm py-2 px-4"
+                    >
+                      {savingExtracted ? '登録中...' : `✓ ${extractedPlayers.filter(p => p.selected).length}人を登録`}
+                    </button>
+                    <button onClick={() => { setExtractedPlayers([]); setExtractedTeamName('') }} className="btn-secondary text-sm py-2 px-4">キャンセル</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <form onSubmit={addPlayer} className="card flex gap-3 mb-4 flex-wrap">
               <input
                 className="input-field w-20 flex-shrink-0"

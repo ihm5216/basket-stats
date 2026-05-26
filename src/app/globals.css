@@ -30,6 +30,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-primary { white-space: nowrap; }
@@ -49,6 +51,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-secondary { white-space: nowrap; }
@@ -80,18 +84,20 @@ body {
   border: 1px solid #374151;
   border-radius: 0.75rem;
   color: white;
-  padding: 0.875rem;
-  font-size: 0.875rem;
+  padding: 0.875rem 0.5rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.1s;
   text-align: center;
-  min-height: 60px;
+  min-height: 64px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .stat-btn:active { transform: scale(0.93); background-color: #374151; }

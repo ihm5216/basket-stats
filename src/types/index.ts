@@ -45,6 +45,11 @@ export type PlayerStat = {
   blocks: number
   turnovers: number
   fouls: number
+  fouls_plain?: number
+  fouls_1ft?: number
+  fouls_2ft?: number
+  fouls_3ft?: number
+  technical_fouls?: number
   minutes: number
   plus_minus: number
 }

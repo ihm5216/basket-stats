@@ -58,11 +58,21 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-8">
           <h1 className="text-2xl font-bold text-white">ダッシュボード</h1>
-          <Link href="/teams/new" className="btn-primary text-sm py-2 px-4">
-            + チームを作成
-          </Link>
+          <div className="flex gap-2">
+            {teams.length > 0 && (
+              <Link
+                href={`/games/new?team=${teams[0].id}`}
+                className="btn-primary text-sm py-2 px-4"
+              >
+                🏀 試合を登録
+              </Link>
+            )}
+            <Link href="/teams/new" className="btn-secondary text-sm py-2 px-4">
+              + チームを作成
+            </Link>
+          </div>
         </div>
 
         {/* チーム一覧 */}
