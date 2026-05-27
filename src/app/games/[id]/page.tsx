@@ -624,10 +624,11 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 }
 
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
+  oppFoulsMap?: Record<string, number>
 }) {
   const qScores = useMemo(() => [1,2,3,4].map(q => ({
     us:  scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0),
@@ -891,7 +892,18 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             playerList={oppPlayerList.map(p => ({id:p.key, number:p.number, name:p.name}))}
             starters={qOppStarters}
             subs={qOppSubs}
-            getStats={() => undefined}
+            getStats={pid => {
+              // oppFoulsMap が渡されていればそれを優先、なければ localStorage の scoresheet_ov から取得
+              const foulsFromProp = oppFoulsMap?.[pid]
+              const fouls = foulsFromProp !== undefined ? foulsFromProp : (() => {
+                try {
+                  const s = localStorage.getItem(`scoresheet_ov_${gameId}`)
+                  return s ? (JSON.parse(s).oppPlayers?.[pid]?.fouls ?? 0) : 0
+                } catch { return 0 }
+              })()
+              if (!fouls) return undefined
+              return { ...emptyStats(gameId, pid), fouls_plain: fouls }
+            }}
             isHome={false}
           />
         </div>
@@ -1293,6 +1305,7 @@ export default function GamePage() {
   const [foulDialog, setFoulDialog] = useState<{ isOpen: boolean; playerId?: string }>({ isOpen: false })
   const [foulOppDialog, setFoulOppDialog] = useState<{ isOpen: boolean; playerKey?: string; playerName?: string }>({ isOpen: false })
   const [oppTeamFouls, setOppTeamFouls] = useState(0)
+  const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, number>>({})
 
   // Q毎の得点（Q ボタンポップアップ用）
   const qScores = useMemo(() => [1,2,3,4].map(q => ({
@@ -1427,6 +1440,19 @@ export default function GamePage() {
       }
     }
 
+    // 相手ファウルマップを復元
+    try {
+      const ovRaw = localStorage.getItem(`scoresheet_ov_${id}`)
+      const ov = ovRaw ? JSON.parse(ovRaw) : null
+      if (ov?.oppPlayers) {
+        const fm: Record<string, number> = {}
+        for (const [k, v] of Object.entries(ov.oppPlayers as Record<string, { fouls?: number }>)) {
+          if (v.fouls) fm[k] = v.fouls
+        }
+        setOppFoulsMap(fm)
+      }
+    } catch { /* ignore */ }
+
     setLoading(false)
   }
 
@@ -1552,14 +1578,18 @@ export default function GamePage() {
   function recordOppFoulWithFT(playerKey: string, ftCount: number) {
     void ftCount
     setOppTeamFouls(prev => prev + 1)
-    try {
-      const storageKey = `scoresheet_ov_${id}`
-      const s = localStorage.getItem(storageKey)
-      const ov = s ? JSON.parse(s) : { quarterScores: {}, homePlayers: {}, oppPlayers: {} }
-      const cur = ov.oppPlayers[playerKey]?.fouls ?? 0
-      ov.oppPlayers[playerKey] = { ...(ov.oppPlayers[playerKey] ?? {}), fouls: cur + 1 }
-      localStorage.setItem(storageKey, JSON.stringify(ov))
-    } catch { /* ignore */ }
+    setOppFoulsMap(prev => {
+      const next = { ...prev, [playerKey]: (prev[playerKey] ?? 0) + 1 }
+      // localStorageにも永続化
+      try {
+        const storageKey = `scoresheet_ov_${id}`
+        const s = localStorage.getItem(storageKey)
+        const ov = s ? JSON.parse(s) : { quarterScores: {}, homePlayers: {}, oppPlayers: {} }
+        ov.oppPlayers[playerKey] = { ...(ov.oppPlayers[playerKey] ?? {}), fouls: next[playerKey] }
+        localStorage.setItem(storageKey, JSON.stringify(ov))
+      } catch { /* ignore */ }
+      return next
+    })
     setFoulOppDialog({ isOpen: false })
     setSelectedOppPlayer(null)
   }
@@ -2009,6 +2039,7 @@ export default function GamePage() {
             gameId={id}
             qConfirmPending={qConfirmPending}
             onConfirmAdvance={confirmQuarterAdvance}
+            oppFoulsMap={oppFoulsMap}
           />
         </div>
       ) : (
