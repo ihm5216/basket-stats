@@ -1274,6 +1274,8 @@ export default function GamePage() {
   const [homeTimeouts, setHomeTimeouts] = useState(0)
   const [oppTimeouts, setOppTimeouts] = useState(0)
   const [foulDialog, setFoulDialog] = useState<{ isOpen: boolean; playerId?: string }>({ isOpen: false })
+  const [foulOppDialog, setFoulOppDialog] = useState<{ isOpen: boolean; playerKey?: string; playerName?: string }>({ isOpen: false })
+  const [oppTeamFouls, setOppTeamFouls] = useState(0)
 
   // Q毎の得点（Q ボタンポップアップ用）
   const qScores = useMemo(() => [1,2,3,4].map(q => ({
@@ -1525,8 +1527,24 @@ export default function GamePage() {
 
   function halftimeReset() {
     setTeamFouls(0)
+    setOppTeamFouls(0)
     setHalfTimeReset(true)
     setTimeout(() => setHalfTimeReset(false), 2000)
+  }
+
+  function recordOppFoulWithFT(playerKey: string, ftCount: number) {
+    void ftCount
+    setOppTeamFouls(prev => prev + 1)
+    try {
+      const storageKey = `scoresheet_ov_${id}`
+      const s = localStorage.getItem(storageKey)
+      const ov = s ? JSON.parse(s) : { quarterScores: {}, homePlayers: {}, oppPlayers: {} }
+      const cur = ov.oppPlayers[playerKey]?.fouls ?? 0
+      ov.oppPlayers[playerKey] = { ...(ov.oppPlayers[playerKey] ?? {}), fouls: cur + 1 }
+      localStorage.setItem(storageKey, JSON.stringify(ov))
+    } catch { /* ignore */ }
+    setFoulOppDialog({ isOpen: false })
+    setSelectedOppPlayer(null)
   }
 
   function confirmCourt(selectedIds: string[], oppKeys: string[]) {
@@ -1678,7 +1696,10 @@ export default function GamePage() {
           byGid.get(c.gid)!.push(c)
         }
         if (byGid.size > 0) {
-          setUndoStack(prev => [...prev, ...[...byGid.values()]].slice(-30))
+          const newEntries = [...byGid.values()]
+          const newStack = [...undoStack, ...newEntries].slice(-30)
+          setUndoStack(newStack)
+          localStorage.setItem(`undo_stack_${id}`, JSON.stringify(newStack))
         }
       }
       skipUndoStackRef.current = false
@@ -1880,7 +1901,10 @@ export default function GamePage() {
           </div>
           <div className="flex gap-1.5">
             <div className={`text-xs px-2 py-1 rounded-full ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
-              F: {teamFouls}
+              自F: {teamFouls}
+            </div>
+            <div className={`text-xs px-2 py-1 rounded-full ${oppTeamFouls >= 5 ? 'bg-blue-500/20 text-blue-400' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
+              相F: {oppTeamFouls}
             </div>
             <button
               onClick={halftimeReset}
@@ -2013,6 +2037,7 @@ export default function GamePage() {
               <div className="flex flex-col gap-1.5">
                 {oppOnCourt.map(player => {
                   const isSelected = selectedOppPlayer?.key === player.key
+                  const oppScore = getOppPlayerScore(scoreEvents, `#${player.number} ${player.name}`)
                   return (
                     <button
                       key={player.key}
@@ -2030,7 +2055,9 @@ export default function GamePage() {
                     >
                       <span className="text-[10px] text-blue-300 font-bold flex-shrink-0 w-8">#{player.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
-                      {subInOppPlayer && <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">↕</span>}
+                      <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">
+                        {subInOppPlayer ? '↕' : oppScore > 0 ? `${oppScore}p` : ''}
+                      </span>
                     </button>
                   )
                 })}
@@ -2076,16 +2103,24 @@ export default function GamePage() {
               ))}
             </div>
           ) : selectedOppPlayer ? (
-            <div className="flex gap-3">
-              {([1, 2, 3] as const).map(pts => (
-                <button
-                  key={pts}
-                  onClick={() => updateOpponentScore(pts, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}
-                  className="flex-1 py-5 rounded-xl bg-blue-500/20 border border-blue-500/50 text-blue-300 font-bold text-2xl active:scale-95 transition-all"
-                >
-                  +{pts}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="flex gap-3">
+                {([1, 2, 3] as const).map(pts => (
+                  <button
+                    key={pts}
+                    onClick={() => updateOpponentScore(pts, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}
+                    className="flex-1 py-4 rounded-xl bg-blue-500/20 border border-blue-500/50 text-blue-300 font-bold text-2xl active:scale-95 transition-all"
+                  >
+                    +{pts}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setFoulOppDialog({ isOpen: true, playerKey: selectedOppPlayer.key, playerName: `#${selectedOppPlayer.number} ${selectedOppPlayer.name}` })}
+                className="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-sm active:scale-95 transition-all"
+              >
+                ファウル
+              </button>
             </div>
           ) : !subInPlayer && !subInOppPlayer ? (
             <div className="card text-center py-4 text-sm text-[var(--muted)]">
@@ -2185,6 +2220,30 @@ export default function GamePage() {
               試合終了 · 最終スコア {game.our_score} - {game.opponent_score}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 相手ファウル+FTダイアログ */}
+      {foulOppDialog.isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setFoulOppDialog({ isOpen: false })}
+        >
+          <div
+            className="bg-[var(--card)] border border-[var(--card-border)] rounded-lg p-6 w-80 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-white mb-1 text-center">相手ファウル</h2>
+            <p className="text-sm text-blue-300 text-center mb-1">{foulOppDialog.playerName}</p>
+            <p className="text-xs text-[var(--muted)] text-center mb-4">自チームのフリースロー数を選択</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 0)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースローなし</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 1)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー1本</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 2)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー2本</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 3)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー3本</button>
+            </div>
+            <button onClick={() => setFoulOppDialog({ isOpen: false })} className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all">キャンセル</button>
+          </div>
         </div>
       )}
 
