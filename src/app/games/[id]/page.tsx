@@ -654,6 +654,24 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
     return map
   }, [gameId])
 
+  const qHomeSubs = useMemo(() => {
+    const map = new Map<number, Set<string>>()
+    for (let q = 1; q <= 4; q++) {
+      const s = localStorage.getItem(`sub_q${q}_${gameId}`)
+      if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
+    }
+    return map
+  }, [gameId])
+
+  const qOppSubs = useMemo(() => {
+    const map = new Map<number, Set<string>>()
+    for (let q = 1; q <= 4; q++) {
+      const s = localStorage.getItem(`sub_opp_q${q}_${gameId}`)
+      if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
+    }
+    return map
+  }, [gameId])
+
   const { aMarks, bMarks, aQEndScores, bQEndScores } = useMemo(() => {
     const aMarks = new Map<number, RunMarkData>()
     const bMarks = new Map<number, RunMarkData>()
@@ -691,19 +709,14 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   }
 
   // チーム別プレイヤーテーブル
-  function TeamSection({ teamLabel, playerList, starters, getStats, isHome }: {
+  function TeamSection({ teamLabel, playerList, starters, subs, getStats, isHome }: {
     teamLabel: string
     playerList: { id: string; number: string; name: string }[]
     starters: Map<number, Set<string>>
+    subs: Map<number, Set<string>>
     getStats: (id: string) => PlayerStat | undefined
     isHome: boolean
   }) {
-    const q1Starters = starters.get(1) ?? new Set<string>()
-    const isSubstitute = (id: string): boolean => {
-      if (q1Starters.has(id)) return false
-      for (let q = 2; q <= 4; q++) { if (starters.get(q)?.has(id)) return true }
-      return false
-    }
     return (
       <div style={{border:'2px solid #333', marginBottom:6}}>
         {/* ヘッダー */}
@@ -759,21 +772,23 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               const stat = getStats(p.id)
               const fouls = stat ? getTotalFouls(stat) : 0
               const foulNotation = stat ? getFoulNotation(stat) : ''
-              const playedQs = [1,2,3,4].filter(q => starters.get(q)?.has(p.id))
               const foulParts = foulNotation.split(' ').filter(x => x)
               return (
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
                   <td style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap'}}>
-                    {isSubstitute(p.id) && <span style={{color:'#c00', fontSize:9, marginRight:2}}>╲</span>}
                     {p.name}
                   </td>
                   <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
-                  {[1,2,3,4].map(q => (
-                    <td key={q} style={{border:B, textAlign:'center', fontSize:11, color:'#c00', fontStyle:'italic'}}>
-                      {playedQs.includes(q) ? '/' : ''}
-                    </td>
-                  ))}
+                  {[1,2,3,4].map(q => {
+                    const isStarter = starters.get(q)?.has(p.id)
+                    const isSub = subs.get(q)?.has(p.id)
+                    return (
+                      <td key={q} style={{border:B, textAlign:'center', fontSize:11, color:'#c00', fontStyle:'italic'}}>
+                        {isStarter ? '/' : isSub ? '╲' : ''}
+                      </td>
+                    )
+                  })}
                   {[1,2,3,4,5].map(f => (
                     <td key={f} style={{border:B, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px'}}>
                       {foulParts[f-1] ?? ''}
@@ -867,6 +882,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             teamLabel="自チーム（A）"
             playerList={players.map(p => ({id:p.id, number:p.number??'', name:p.name}))}
             starters={qHomeStarters}
+            subs={qHomeSubs}
             getStats={id => statsMap.get(id)}
             isHome={true}
           />
@@ -874,6 +890,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             teamLabel={`${game.opponent}（B）`}
             playerList={oppPlayerList.map(p => ({id:p.key, number:p.number, name:p.name}))}
             starters={qOppStarters}
+            subs={qOppSubs}
             getStats={() => undefined}
             isHome={false}
           />
@@ -1565,6 +1582,14 @@ export default function GamePage() {
     const newIds = onCourtIds.map(cid => cid === courtPlayerId ? subInPlayer.id : cid)
     setOnCourtIds(newIds)
     localStorage.setItem(`court_${id}`, JSON.stringify(newIds))
+    // 途中出場をQごとに記録（スコアシートの╲表示用）
+    const subKey = `sub_q${currentQuarter}_${id}`
+    try {
+      const existing = JSON.parse(localStorage.getItem(subKey) ?? '[]') as string[]
+      if (!existing.includes(subInPlayer.id)) {
+        localStorage.setItem(subKey, JSON.stringify([...existing, subInPlayer.id]))
+      }
+    } catch { /* ignore */ }
     setSubInPlayer(null)
     setSelectedPlayer(null)
   }
@@ -1574,6 +1599,14 @@ export default function GamePage() {
     const newKeys = oppCourtKeys.map(k => k === courtPlayerKey ? subInOppPlayer.key : k)
     setOppCourtKeys(newKeys)
     localStorage.setItem(`court_opp_${id}`, JSON.stringify(newKeys))
+    // 相手途中出場をQごとに記録
+    const subKey = `sub_opp_q${currentQuarter}_${id}`
+    try {
+      const existing = JSON.parse(localStorage.getItem(subKey) ?? '[]') as string[]
+      if (!existing.includes(subInOppPlayer.key)) {
+        localStorage.setItem(subKey, JSON.stringify([...existing, subInOppPlayer.key]))
+      }
+    } catch { /* ignore */ }
     setSubInOppPlayer(null)
     setSelectedOppPlayer(null)
   }
