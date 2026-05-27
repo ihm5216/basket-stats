@@ -74,6 +74,29 @@ function getTotalFouls(stat: PlayerStat): number {
   return (stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0)
 }
 
+function getFoulNotation(stat: PlayerStat): string {
+  const parts: string[] = []
+  const plain = stat.fouls_plain ?? 0
+  const ft1 = stat.fouls_1ft ?? 0
+  const ft2 = stat.fouls_2ft ?? 0
+  const ft3 = stat.fouls_3ft ?? 0
+  const tech = stat.technical_fouls ?? 0
+
+  for (let i = 0; i < plain; i++) parts.push('P')
+  for (let i = 0; i < ft1; i++) parts.push('P1')
+  for (let i = 0; i < ft2; i++) parts.push('P2')
+  for (let i = 0; i < ft3; i++) parts.push('P3')
+  for (let i = 0; i < tech; i++) parts.push('T')
+
+  return parts.join(' ')
+}
+
+function getOppPlayerScore(scoreEvents: ScoreEvent[], playerName: string): number {
+  return scoreEvents
+    .filter(e => e.team === 'opponent' && e.opp_player_name === playerName)
+    .reduce((sum, e) => sum + e.points, 0)
+}
+
 // ─── ランニングスコア表示 ──────────────────────────────────────────────────────
 function RunningScoreView({ events, teamName, opponentName, players }: {
   events: ScoreEvent[]
@@ -184,6 +207,26 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
     }
     return map
   }, [gameId])
+
+  // 相手チームの各Qのスターター
+  const qOppStarters = useMemo(() => {
+    const map = new Map<number, Set<string>>()
+    for (let q = 1; q <= 4; q++) {
+      const s = localStorage.getItem(`court_opp_q${q}_${gameId}`)
+      if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
+    }
+    return map
+  }, [gameId])
+
+  // 途中出場判定関数（相手チーム用）
+  const isOppSubstitute = (key: string): boolean => {
+    const q1Starters = qOppStarters.get(1) ?? new Set<string>()
+    if (q1Starters.has(key)) return false
+    for (let q = 2; q <= 4; q++) {
+      if (qOppStarters.get(q)?.has(key)) return true
+    }
+    return false
+  }
 
   function saveOv(next: ScoresheetOverrides) { setOv(next); localStorage.setItem(storageKey, JSON.stringify(next)) }
 
@@ -465,6 +508,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
               <tbody>
                 {oppPlayerList.map(p => {
                   const fouls = ov.oppPlayers[p.key]?.fouls ?? 0
+                  const score = getOppPlayerScore(scoreEvents, `#${p.number} ${p.name}`)
                   const appearedQs = [1,2,3,4].filter(q => {
                     const s = localStorage.getItem(`court_opp_q${q}_${gameId}`)
                     if (!s) return false
@@ -473,7 +517,11 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                   return (
                     <tr key={p.key} className="border-b border-[var(--card-border)]/50">
                       <td className="py-2 px-3 text-blue-400 font-bold">{p.number || '—'}</td>
-                      <td className="py-2 pr-2 text-white truncate max-w-[100px]">{p.name}</td>
+                      <td className="py-2 pr-2 text-white truncate max-w-[100px] flex items-center gap-1">
+                        {isOppSubstitute(p.key) && <span className="text-red-500 text-[11px] font-bold">／</span>}
+                        <span>{p.name}</span>
+                        {score > 0 && <span className="text-[var(--muted)] text-[9px]">{score}pts</span>}
+                      </td>
                       <td className="py-2 px-1 text-center">
                         <div className="flex gap-0.5 justify-center">
                           {[1,2,3,4].map(q => (
@@ -713,7 +761,9 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               )
               const stat = getStats(p.id)
               const fouls = stat ? getTotalFouls(stat) : 0
+              const foulNotation = stat ? getFoulNotation(stat) : ''
               const playedQs = [1,2,3,4].filter(q => starters.get(q)?.has(p.id))
+              const foulParts = foulNotation.split(' ').filter(x => x)
               return (
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
@@ -728,8 +778,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     </td>
                   ))}
                   {[1,2,3,4,5].map(f => (
-                    <td key={f} style={{border:B, textAlign:'center', fontSize:8, color:'#c00', fontWeight:'bold'}}>
-                      {f <= fouls ? 'P' : ''}
+                    <td key={f} style={{border:B, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px'}}>
+                      {foulParts[f-1] ?? ''}
                     </td>
                   ))}
                 </tr>
@@ -1223,6 +1273,7 @@ export default function GamePage() {
   const [qConfirmPending, setQConfirmPending] = useState<number | null>(null) // Q終了後の確認待ち
   const [homeTimeouts, setHomeTimeouts] = useState(0)
   const [oppTimeouts, setOppTimeouts] = useState(0)
+  const [foulDialog, setFoulDialog] = useState<{ isOpen: boolean; playerId?: string }>({ isOpen: false })
 
   // Q毎の得点（Q ボタンポップアップ用）
   const qScores = useMemo(() => [1,2,3,4].map(q => ({
@@ -1371,8 +1422,33 @@ export default function GamePage() {
     return applied as unknown as PlayerStat
   }
 
+  function recordFoulWithFT(playerId: string, ftCount: number) {
+    const foulKey: StatKey = ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
+    const gid = ++gidRef.current
+    setPending(prev => [...prev, { playerId, key: foulKey, delta: 1, gid }])
+    setTeamFouls(prev => prev + 1)
+    setFoulDialog({ isOpen: false })
+    setSelectedPlayer(null)
+  }
+
   function handleStatTap(btn: typeof STAT_BUTTONS[0]) {
     if (!selectedPlayer) return
+
+    // テクニカルファウルは直接記録（FTなし）
+    if (btn.key === 'technical_fouls') {
+      const gid = ++gidRef.current
+      setPending(prev => [...prev, { playerId: selectedPlayer.id, key: 'technical_fouls', delta: 1, gid }])
+      setTeamFouls(prev => prev + 1)
+      setSelectedPlayer(null)
+      return
+    }
+
+    // 通常のファウルボタンはダイアログを開く
+    if (['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft'].includes(btn.key)) {
+      setFoulDialog({ isOpen: true, playerId: selectedPlayer.id })
+      return
+    }
+
     const gid = ++gidRef.current
     const newPending: PendingChange[] = [{ playerId: selectedPlayer.id, key: btn.key, delta: btn.delta, gid }]
     if (btn.key === 'fg2_made') newPending.push({ playerId: selectedPlayer.id, key: 'fg2_attempt', delta: 1, gid })
@@ -1394,7 +1470,6 @@ export default function GamePage() {
         }]
       })
     }
-    if (['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(btn.key)) setTeamFouls(prev => prev + 1)
     setPending(prev => [...prev, ...newPending])
     setSelectedPlayer(null) // スタッツ記録後に自動デセレクト
   }
@@ -2110,6 +2185,53 @@ export default function GamePage() {
               試合終了 · 最終スコア {game.our_score} - {game.opponent_score}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ファウル+FTダイアログ */}
+      {foulDialog.isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setFoulDialog({ isOpen: false })}
+        >
+          <div
+            className="bg-[var(--card)] border border-[var(--card-border)] rounded-lg p-6 w-80 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-white mb-4 text-center">ファウル時のフリースロー数を選択</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, 0)}
+                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                フリースローなし
+              </button>
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, 1)}
+                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                フリースロー1本
+              </button>
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, 2)}
+                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                フリースロー2本
+              </button>
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, 3)}
+                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                フリースロー3本
+              </button>
+            </div>
+            <button
+              onClick={() => setFoulDialog({ isOpen: false })}
+              className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all"
+            >
+              キャンセル
+            </button>
+          </div>
         </div>
       )}
     </div>
