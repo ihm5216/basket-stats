@@ -172,7 +172,7 @@ type ScoresheetOverrides = {
   homePlayers: Record<string, { pts?: number; fouls?: number }>
   oppPlayers: Record<string, { fouls?: number }>
 }
-type RunMarkData = { type: '2P' | '3P' | 'FT'; num: string }
+type RunMarkData = { type: '2P' | '3P' | 'FT'; num: string; quarter?: number }
 
 function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   qConfirmPending, onConfirmAdvance, onFoulEdit, onPtsEdit
@@ -276,12 +276,12 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
         const scorer = ev.player_id ? players.find(p => p.id === ev.player_id) : null
         const num = scorer?.number ?? ''
         aCur += ev.points
-        aMarks.set(aCur, { type, num })
+        aMarks.set(aCur, { type, num, quarter: ev.quarter })
         aLastByQ.set(ev.quarter, aCur)
       } else {
         const m = ev.opp_player_name?.match(/#(\d+)/); const num = m ? m[1] : ''
         bCur += ev.points
-        bMarks.set(bCur, { type, num })
+        bMarks.set(bCur, { type, num, quarter: ev.quarter })
         bLastByQ.set(ev.quarter, bCur)
       }
     }
@@ -515,7 +515,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                     <tr key={p.key} className="border-b border-[var(--card-border)]/50">
                       <td className="py-2 px-3 text-blue-400 font-bold">{p.number || '—'}</td>
                       <td className="py-2 pr-2 text-white truncate max-w-[100px] flex items-center gap-1">
-                        {isOppSubstitute(p.key) && <span className="text-red-500 text-[11px] font-bold">／</span>}
+                        {isOppSubstitute(p.key) && <span className="text-red-500 text-[11px] font-bold">＼</span>}
                         <span>{p.name}</span>
                         {score > 0 && <span className="text-[var(--muted)] text-[9px]">{score}pts</span>}
                       </td>
@@ -665,12 +665,12 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
       if (ev.team === 'us') {
         const num = players.find(p => p.id === ev.player_id)?.number ?? ''
         aC += ev.points
-        aMarks.set(aC, { type, num })
+        aMarks.set(aC, { type, num, quarter: ev.quarter })
         aLastByQ.set(ev.quarter, aC)
       } else {
         const m = ev.opp_player_name?.match(/#(\d+)/); const num = m ? m[1] : ''
         bC += ev.points
-        bMarks.set(bC, { type, num })
+        bMarks.set(bC, { type, num, quarter: ev.quarter })
         bLastByQ.set(ev.quarter, bC)
       }
     }
@@ -765,7 +765,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
                   <td style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap'}}>
-                    {isSubstitute(p.id) && <span style={{color:'#c00', fontSize:9, marginRight:2}}>╱</span>}
+                    {isSubstitute(p.id) && <span style={{color:'#c00', fontSize:9, marginRight:2}}>╲</span>}
                     {p.name}
                   </td>
                   <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
@@ -905,12 +905,15 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                       const bbB = bEnd ? TB : B
                       const aM = aMarks.get(n)
                       const bM = bMarks.get(n)
+                      const qClr = (q?: number) => (q === 1 || q === 3) ? '#c00' : '#222'
+                      const aColor = qClr(aM?.quarter)
+                      const bColor = qClr(bM?.quarter)
                       return [
-                        <td key={`a${n}`} style={{border:B, borderBottom:bbA, width:30, height:13, position:'relative', textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:'#c00'}}>
+                        <td key={`a${n}`} style={{border:B, borderBottom:bbA, width:30, height:13, position:'relative', textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:aColor}}>
                           <span style={{position:'absolute', top:0, left:1, fontSize:5, color:'#bbb', lineHeight:'1', userSelect:'none'}}>{n}</span>
                           {markContent(aM)}
                         </td>,
-                        <td key={`b${n}`} style={{border:B, borderBottom:bbB, borderRight:gi<2?'2px solid #888':B, width:30, height:13, textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:'#00c'}}>
+                        <td key={`b${n}`} style={{border:B, borderBottom:bbB, borderRight:gi<2?'2px solid #888':B, width:30, height:13, textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:bColor}}>
                           {markContent(bM)}
                         </td>,
                       ]
