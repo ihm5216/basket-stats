@@ -34,9 +34,6 @@ const STAT_BUTTONS: { label: string; key: StatKey; delta: number; category: 'mad
   { label: 'ブロック', key: 'blocks', delta: 1, category: 'neutral' },
   { label: 'ターンオーバー', key: 'turnovers', delta: 1, category: 'missed' },
   { label: 'ファウル', key: 'fouls_plain', delta: 1, category: 'missed' },
-  { label: 'ファウル・FT1', key: 'fouls_1ft', delta: 1, category: 'missed' },
-  { label: 'ファウル・FT2', key: 'fouls_2ft', delta: 1, category: 'missed' },
-  { label: 'ファウル・FT3', key: 'fouls_3ft', delta: 1, category: 'missed' },
   { label: 'テクニカルファウル', key: 'technical_fouls', delta: 1, category: 'missed' },
 ]
 
