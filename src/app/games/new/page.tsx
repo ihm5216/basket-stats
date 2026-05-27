@@ -231,10 +231,15 @@ function NewGameForm() {
       if (homePlayerIds.length > 0) {
         localStorage.setItem(`game_${data.id}_home_players`, JSON.stringify(homePlayerIds))
       }
-      // 相手チーム選手を保存
+      // 相手チーム選手を保存（localStorage + Supabaseの両方に永続化）
       const oppToSave = oppPlayers.filter(p => p.selected && p.name.trim())
       if (oppToSave.length > 0) {
-        localStorage.setItem(`game_${data.id}_opponent_players`, JSON.stringify(oppToSave))
+        const oppData = oppToSave.map(({ selected: _s, ...rest }) => rest)
+        localStorage.setItem(`game_${data.id}_opponent_players`, JSON.stringify(oppData))
+        // Supabaseにも保存（クロスデバイス対応）
+        try {
+          await supabase.from('games').update({ opponent_players: oppData }).eq('id', data.id)
+        } catch { /* カラムが存在しない場合は無視 */ }
       }
       router.push(`/games/${data.id}`)
     } else {

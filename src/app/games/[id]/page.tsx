@@ -1309,6 +1309,7 @@ export default function GamePage() {
   const gidRef = useRef(0)
   const skipUndoStackRef = useRef(false)
   const gameRef = useRef<Game | null>(null)
+  const scoreEventsRef = useRef<ScoreEvent[]>([])
   const [undoStack, setUndoStack] = useState<PendingChange[][]>([])
   const [subInPlayer, setSubInPlayer] = useState<Player | null>(null)
   const [subInOppPlayer, setSubInOppPlayer] = useState<OppPlayer | null>(null)
@@ -1342,8 +1343,9 @@ export default function GamePage() {
 
   useEffect(() => { loadData() }, [id])
 
-  // gameRef を常に最新の game に同期（saveStats のクロージャずれ対策）
+  // gameRef / scoreEventsRef を常に最新に同期（saveStats のクロージャずれ対策）
   useEffect(() => { gameRef.current = game }, [game])
+  useEffect(() => { scoreEventsRef.current = scoreEvents }, [scoreEvents])
 
   useEffect(() => {
     if (pending.length > 0) localStorage.setItem(`pending_${id}`, JSON.stringify(pending))
@@ -1419,6 +1421,20 @@ export default function GamePage() {
           setGame(prev => prev ? { ...prev, our_score: correctOurScore } : prev)
         }
       } catch { /* ignore */ }
+    } else if (gameData.score_events_json) {
+      // localStorage になければ Supabase の永続化データから復元（クロスデバイス対応）
+      try {
+        const events = gameData.score_events_json as ScoreEvent[]
+        if (Array.isArray(events) && events.length > 0) {
+          setScoreEvents(events)
+          const last = events[events.length - 1]
+          setGame(prev => prev ? {
+            ...prev,
+            our_score: Math.max(correctOurScore, last.our_score_after),
+            opponent_score: last.opponent_score_after,
+          } : prev)
+        }
+      } catch { /* ignore */ }
     }
 
     // game state を最新スコアで同期（scoreEvents 読み込み後）
@@ -1433,13 +1449,24 @@ export default function GamePage() {
       try { setUndoStack(JSON.parse(savedUndo)) } catch { /* ignore */ }
     }
 
-    // 相手チーム選手を読み込む
+    // 相手チーム選手を読み込む（localStorage優先、なければSupabaseから復元）
     const savedOpp = localStorage.getItem(`game_${id}_opponent_players`)
     if (savedOpp) {
       try {
         const oppList = JSON.parse(savedOpp) as { number: string; name: string }[]
         setOpponentPlayerKeys(new Set(oppList.map(p => `${p.number}_${p.name}`)))
         setOppPlayerList(oppList.map(p => ({ key: `opp_${p.number}_${p.name}`, number: p.number, name: p.name })))
+      } catch { /* ignore */ }
+    } else if (gameData.opponent_players) {
+      // localStorageになければSupabaseから復元（クロスデバイス対応）
+      try {
+        const oppList = gameData.opponent_players as { number: string; name: string }[]
+        if (Array.isArray(oppList) && oppList.length > 0) {
+          setOpponentPlayerKeys(new Set(oppList.map(p => `${p.number}_${p.name}`)))
+          setOppPlayerList(oppList.map(p => ({ key: `opp_${p.number}_${p.name}`, number: p.number, name: p.name })))
+          // 次回のためにlocalStorageにもキャッシュ
+          localStorage.setItem(`game_${id}_opponent_players`, JSON.stringify(oppList))
+        }
       } catch { /* ignore */ }
     }
 
@@ -1800,10 +1827,13 @@ export default function GamePage() {
     }
 
     if (gameRef.current) {
+      // score_events_json も同時に保存してクロスデバイス同期
+      const currentEvents = scoreEventsRef.current
       await supabase.from('games')
         .update({
           our_score: Math.max(0, gameRef.current.our_score),
           opponent_score: Math.max(0, gameRef.current.opponent_score),
+          ...(currentEvents.length > 0 ? { score_events_json: currentEvents } : {}),
         })
         .eq('id', id)
     }
@@ -1844,9 +1874,17 @@ export default function GamePage() {
     if (!confirm('試合を終了しますか？')) return
     await saveStats()
     const supabase = createClient()
-    await supabase.from('games').update({ is_finished: true, quarter: currentQuarter }).eq('id', id)
 
-    // score_events テーブルがある場合に保存を試みる（なければ無視）
+    // 相手選手・スコアイベントを games テーブルに永続化（クロスデバイス対応）
+    const oppPlayersData = oppPlayerList.map(p => ({ number: p.number, name: p.name }))
+    await supabase.from('games').update({
+      is_finished: true,
+      quarter: currentQuarter,
+      ...(scoreEvents.length > 0 ? { score_events_json: scoreEvents } : {}),
+      ...(oppPlayersData.length > 0 ? { opponent_players: oppPlayersData } : {}),
+    }).eq('id', id)
+
+    // score_events テーブルにも個別行として保存（opp_player_name 含む）
     if (scoreEvents.length > 0) {
       try {
         await supabase.from('score_events').insert(
@@ -1856,6 +1894,7 @@ export default function GamePage() {
             team: e.team,
             points: e.points,
             player_id: e.player_id ?? null,
+            opp_player_name: e.opp_player_name ?? null,
             our_score_after: e.our_score_after,
             opponent_score_after: e.opponent_score_after,
           }))

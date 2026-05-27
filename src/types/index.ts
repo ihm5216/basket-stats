@@ -27,6 +27,9 @@ export type Game = {
   quarter: number
   is_finished: boolean
   created_at: string
+  // クロスデバイス同期用（Supabase永続化）
+  score_events_json?: unknown
+  opponent_players?: unknown
 }
 
 export type PlayerStat = {
