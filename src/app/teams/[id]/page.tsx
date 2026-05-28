@@ -24,6 +24,7 @@ export default function TeamPage() {
   const [shareMsg, setShareMsg] = useState('')
   const [newPlayerName, setNewPlayerName] = useState('')
   const [newPlayerNumber, setNewPlayerNumber] = useState('')
+  const [numberWarning, setNumberWarning] = useState(false)
   const [addingPlayer, setAddingPlayer] = useState(false)
   // 写真登録
   const [extracting, setExtracting] = useState(false)
@@ -315,25 +316,38 @@ export default function TeamPage() {
               )}
             </div>
 
-            <form onSubmit={addPlayer} className="card flex gap-3 mb-4 flex-wrap">
-              <input
-                className="input-field w-20 flex-shrink-0"
-                placeholder="#番号"
-                value={newPlayerNumber}
-                onChange={e => setNewPlayerNumber(toHankaku(e.target.value))}
-                inputMode="numeric"
-                maxLength={3}
-              />
-              <input
-                className="input-field flex-1 min-w-32"
-                placeholder="選手名"
-                value={newPlayerName}
-                onChange={e => setNewPlayerName(e.target.value)}
-                required
-              />
-              <button type="submit" disabled={addingPlayer} className="btn-primary py-2 px-4 text-sm whitespace-nowrap">
-                追加
-              </button>
+            <form onSubmit={addPlayer} className="card flex flex-col gap-2 mb-4">
+              <div className="flex gap-3 flex-wrap">
+                <input
+                  className={`input-field w-20 flex-shrink-0 ${numberWarning ? 'border-yellow-400' : ''}`}
+                  placeholder="#番号"
+                  value={newPlayerNumber}
+                  onChange={e => {
+                    const raw = e.target.value
+                    const hasZenkaku = /[０-９]/.test(raw)
+                    if (hasZenkaku) setNumberWarning(true)
+                    else setNumberWarning(false)
+                    setNewPlayerNumber(toHankaku(raw))
+                  }}
+                  inputMode="numeric"
+                  maxLength={3}
+                />
+                <input
+                  className="input-field flex-1 min-w-32"
+                  placeholder="選手名"
+                  value={newPlayerName}
+                  onChange={e => setNewPlayerName(e.target.value)}
+                  required
+                />
+                <button type="submit" disabled={addingPlayer} className="btn-primary py-2 px-4 text-sm whitespace-nowrap">
+                  追加
+                </button>
+              </div>
+              {numberWarning ? (
+                <p className="text-xs text-yellow-400">⚠ 全角数字を半角に自動変換しました。背番号は半角数字で入力してください。</p>
+              ) : (
+                <p className="text-xs" style={{color:'var(--muted)'}}>背番号は半角数字（例: 10）で入力してください</p>
+              )}
             </form>
 
             {players.length === 0 ? (

@@ -803,30 +803,6 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           </tbody>
         </table>
 
-        {/* Qスコア */}
-        <div style={{
-          borderTop:'1px solid #555', padding:'2px 6px',
-          display:'flex', justifyContent:'space-between', fontSize:8, background:'#f9f9f5'
-        }}>
-          {[1,2,3,4].map(q => (
-            <div key={q} style={{textAlign:'center'}}>
-              <div style={{fontSize:6, color:'#888'}}>Q{q}</div>
-              <div style={{fontWeight:'bold'}}>
-                <span style={isHome ? {color:'#c00'} : {}}>{qScores[q-1].us}</span>
-                <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
-                <span style={!isHome ? {color:'#00c'} : {}}>{qScores[q-1].opp}</span>
-              </div>
-            </div>
-          ))}
-          <div style={{textAlign:'center', borderLeft:'1px solid #ddd', paddingLeft:8}}>
-            <div style={{fontSize:6, color:'#888'}}>合計</div>
-            <div style={{fontWeight:'bold', fontSize:11}}>
-              <span style={{color:'#c00'}}>{totalUs}</span>
-              <span style={{color:'#aaa', margin:'0 2px'}}>-</span>
-              <span style={{color:'#00c'}}>{totalOpp}</span>
-            </div>
-          </div>
-        </div>
       </div>
     )
   }
@@ -889,6 +865,32 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             getStats={id => statsMap.get(id)}
             isHome={true}
           />
+          {/* Qスコア（1回だけ、両チームの間に表示） */}
+          <div style={{
+            borderTop:'1px solid #555', borderBottom:'1px solid #555',
+            padding:'3px 6px', margin:'4px 0',
+            display:'flex', justifyContent:'space-between', fontSize:8, background:'#f0f4ff'
+          }}>
+            {[1,2,3,4].map(q => (
+              <div key={q} style={{textAlign:'center'}}>
+                <div style={{fontSize:6, color:'#888'}}>Q{q}</div>
+                <div style={{fontWeight:'bold'}}>
+                  <span style={{color:'#c00'}}>{qScores[q-1].us}</span>
+                  <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
+                  <span style={{color:'#00c'}}>{qScores[q-1].opp}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{textAlign:'center', borderLeft:'1px solid #ccd', paddingLeft:8}}>
+              <div style={{fontSize:6, color:'#888'}}>合計</div>
+              <div style={{fontWeight:'bold', fontSize:11}}>
+                <span style={{color:'#c00'}}>{totalUs}</span>
+                <span style={{color:'#aaa', margin:'0 2px'}}>-</span>
+                <span style={{color:'#00c'}}>{totalOpp}</span>
+              </div>
+            </div>
+          </div>
+
           <TeamSection
             teamLabel={`${game.opponent}（B）`}
             playerList={oppPlayerList.map(p => ({id:p.key, number:p.number, name:p.name}))}
@@ -980,7 +982,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList 
   scoreEvents: ScoreEvent[]
   oppPlayerList: OppPlayer[]
 }) {
-  const [tab, setTab] = useState<'stats' | 'running' | 'scoresheet'>('stats')
+  const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
   // 試合に登録された選手のうち、スタッツが存在する選手のみ表示
   const rows = players
     .filter(p => statsMap.has(p.id))
@@ -1077,12 +1079,6 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList 
           選手スタッツ
         </button>
         <button
-          onClick={() => setTab('running')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === 'running' ? 'border-orange-500 text-orange-500' : 'border-transparent text-[var(--muted)]'}`}
-        >
-          ランニング
-        </button>
-        <button
           onClick={() => setTab('scoresheet')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === 'scoresheet' ? 'border-orange-500 text-orange-500' : 'border-transparent text-[var(--muted)]'}`}
         >
@@ -1110,7 +1106,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList 
                     <th className="text-right py-2 pr-3">STL</th>
                     <th className="text-right py-2 pr-3">BLK</th>
                     <th className="text-right py-2 pr-3">TO</th>
-                    <th className="text-right py-2 pr-2">反</th>
+                    <th className="text-right py-2 pr-2">F</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1149,15 +1145,6 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList 
               </table>
             </div>
           </>
-        )}
-
-        {tab === 'running' && (
-          <RunningScoreView
-            events={scoreEvents}
-            teamName="自チーム"
-            opponentName={game.opponent}
-            players={players}
-          />
         )}
 
         {tab === 'scoresheet' && (
