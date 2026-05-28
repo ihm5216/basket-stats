@@ -30,6 +30,7 @@ export type Game = {
   // クロスデバイス同期用（Supabase永続化）
   score_events_json?: unknown
   opponent_players?: unknown
+  home_player_ids?: unknown
 }
 
 export type PlayerStat = {

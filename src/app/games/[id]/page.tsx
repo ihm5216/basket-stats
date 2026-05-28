@@ -981,10 +981,13 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList 
   oppPlayerList: OppPlayer[]
 }) {
   const [tab, setTab] = useState<'stats' | 'running' | 'scoresheet'>('stats')
-  const rows = players.map(p => ({
-    player: p,
-    stat: statsMap.get(p.id) ?? emptyStats(game.id, p.id),
-  }))
+  // 試合に登録された選手のうち、スタッツが存在する選手のみ表示
+  const rows = players
+    .filter(p => statsMap.has(p.id))
+    .map(p => ({
+      player: p,
+      stat: statsMap.get(p.id)!,
+    }))
 
   // 個人スタッツの合計得点を正とする
   const totalPoints = rows.reduce((sum, { stat }) => sum + calcPoints(stat), 0)
@@ -1379,9 +1382,16 @@ export default function GamePage() {
 
     // この試合専用メンバーがあればそれを優先（新フロー）、なければ全選手
     const savedHomeIds = localStorage.getItem(`game_${id}_home_players`)
+    // localStorageになければSupabaseのhome_player_idsから復元（クロスデバイス対応）
+    const homeIds: string[] | null = savedHomeIds
+      ? JSON.parse(savedHomeIds)
+      : (gameData.home_player_ids as string[] | null) ?? null
+    if (homeIds && !savedHomeIds) {
+      localStorage.setItem(`game_${id}_home_players`, JSON.stringify(homeIds))
+    }
     const [{ data: playersData }, { data: statsData }] = await Promise.all([
-      savedHomeIds
-        ? supabase.from('players').select('*').in('id', JSON.parse(savedHomeIds)).order('number')
+      homeIds
+        ? supabase.from('players').select('*').in('id', homeIds).order('number')
         : supabase.from('players').select('*').eq('team_id', gameData.team_id).order('number'),
       supabase.from('player_stats').select('*').eq('game_id', id),
     ])

@@ -9,6 +9,10 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { exportToCSV, aggregateSeasonStats } from '@/lib/stats'
 
+function toHankaku(str: string): string {
+  return str.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
+}
+
 export default function TeamPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -99,7 +103,7 @@ export default function TeamPage() {
     if (toAdd.length === 0) return
     setSavingExtracted(true)
     const supabase = createClient()
-    const rows = toAdd.map(p => ({ team_id: id, name: p.name.trim(), number: p.number.trim() }))
+    const rows = toAdd.map(p => ({ team_id: id, name: p.name.trim(), number: toHankaku(p.number) }))
     const { data } = await supabase.from('players').insert(rows).select()
     if (data) {
       setPlayers(prev => [...prev, ...data].sort((a, b) => Number(a.number) - Number(b.number)))
@@ -316,7 +320,8 @@ export default function TeamPage() {
                 className="input-field w-20 flex-shrink-0"
                 placeholder="#番号"
                 value={newPlayerNumber}
-                onChange={e => setNewPlayerNumber(e.target.value)}
+                onChange={e => setNewPlayerNumber(toHankaku(e.target.value))}
+                inputMode="numeric"
                 maxLength={3}
               />
               <input

@@ -230,6 +230,10 @@ function NewGameForm() {
       const homePlayerIds = [...selectedExistingIds, ...newInsertedIds]
       if (homePlayerIds.length > 0) {
         localStorage.setItem(`game_${data.id}_home_players`, JSON.stringify(homePlayerIds))
+        // Supabaseにも保存（クロスデバイス対応）
+        try {
+          await supabase.from('games').update({ home_player_ids: homePlayerIds }).eq('id', data.id)
+        } catch { /* ignore */ }
       }
       // 相手チーム選手を保存（localStorage + Supabaseの両方に永続化）
       const oppToSave = oppPlayers.filter(p => p.selected && p.name.trim())
