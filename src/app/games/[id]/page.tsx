@@ -845,7 +845,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
         <div style={{fontSize:9, fontWeight:'bold', color:'#444'}}>JBA OFFICIAL SCORESHEET</div>
         <div style={{fontSize:10, fontWeight:'bold'}}>
           {game.game_date ? new Date(game.game_date).toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'}) : ''}
-          {game.location ? `　${game.location}` : ''}
+          {'　'}チームA: 自チーム　チームB: {game.opponent}
         </div>
         <div style={{fontSize:13, fontWeight:'bold'}}>
           <span style={{color:'#c00'}}>{totalUs}</span>
@@ -855,44 +855,45 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
       </div>
 
       <div style={{display:'flex', gap:6, alignItems:'flex-start'}}>
-        {/* 左: チームセクション */}
-        <div style={{flex:'0 0 auto', minWidth:240, maxWidth:290}}>
+        {/* 左: チームセクション（A上・B下の縦積み） */}
+        <div style={{flex:'0 0 auto', minWidth:240, maxWidth:300}}>
           <TeamSection
-            teamLabel="自チーム（A）"
+            teamLabel="チームA: 自チーム"
             playerList={players.map(p => ({id:p.id, number:p.number??'', name:p.name}))}
             starters={qHomeStarters}
             subs={qHomeSubs}
             getStats={id => statsMap.get(id)}
             isHome={true}
           />
-          {/* Qスコア（1回だけ、両チームの間に表示） */}
-          <div style={{
-            borderTop:'1px solid #555', borderBottom:'1px solid #555',
-            padding:'3px 6px', margin:'4px 0',
-            display:'flex', justifyContent:'space-between', fontSize:8, background:'#f0f4ff'
-          }}>
-            {[1,2,3,4].map(q => (
-              <div key={q} style={{textAlign:'center'}}>
-                <div style={{fontSize:6, color:'#888'}}>Q{q}</div>
-                <div style={{fontWeight:'bold'}}>
-                  <span style={{color:'#c00'}}>{qScores[q-1].us}</span>
-                  <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
-                  <span style={{color:'#00c'}}>{qScores[q-1].opp}</span>
+          {/* Qスコア & チームファウル（両チーム間に1回のみ） */}
+          <div style={{border:'1px solid #888', margin:'3px 0', background:'#f8f8f4'}}>
+            <div style={{background:'#e8e8e0', fontSize:6, fontWeight:'bold', padding:'1px 4px', borderBottom:'1px solid #aaa'}}>
+              クォータースコア / QUARTER SCORE
+            </div>
+            <div style={{display:'flex', padding:'2px 4px', gap:4}}>
+              {[1,2,3,4].map(q => (
+                <div key={q} style={{flex:1, textAlign:'center', borderRight: q<4 ? '1px solid #ddd' : 'none', paddingRight:3}}>
+                  <div style={{fontSize:5, color:'#888', fontWeight:'bold'}}>Q{q}</div>
+                  <div style={{fontSize:8, fontWeight:'bold'}}>
+                    <span style={{color:'#c00'}}>{qScores[q-1].us}</span>
+                    <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
+                    <span style={{color:'#00c'}}>{qScores[q-1].opp}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div style={{textAlign:'center', borderLeft:'1px solid #ccd', paddingLeft:8}}>
-              <div style={{fontSize:6, color:'#888'}}>合計</div>
-              <div style={{fontWeight:'bold', fontSize:11}}>
-                <span style={{color:'#c00'}}>{totalUs}</span>
-                <span style={{color:'#aaa', margin:'0 2px'}}>-</span>
-                <span style={{color:'#00c'}}>{totalOpp}</span>
+              ))}
+              <div style={{textAlign:'center', borderLeft:'2px solid #aaa', paddingLeft:6}}>
+                <div style={{fontSize:5, color:'#888', fontWeight:'bold'}}>合計</div>
+                <div style={{fontSize:10, fontWeight:'bold'}}>
+                  <span style={{color:'#c00'}}>{totalUs}</span>
+                  <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
+                  <span style={{color:'#00c'}}>{totalOpp}</span>
+                </div>
               </div>
             </div>
           </div>
 
           <TeamSection
-            teamLabel={`${game.opponent}（B）`}
+            teamLabel={`チームB: ${game.opponent}`}
             playerList={oppPlayerList.map(p => ({id:p.key, number:p.number, name:p.name}))}
             starters={qOppStarters}
             subs={qOppSubs}
@@ -1186,6 +1187,15 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
   function handleConfirm() {
     if (selected.length < 5) {
       setConfirmError(`自チームのスターターを5人選んでください（現在${selected.length}人）`)
+      return
+    }
+    // 同じ背番号の選手が選ばれていないかチェック
+    const selectedPlayers = players.filter(p => selected.includes(p.id))
+    const numbers = selectedPlayers.map(p => p.number).filter(n => n)
+    const dupNums = numbers.filter((n, i) => numbers.indexOf(n) !== i)
+    if (dupNums.length > 0) {
+      const dupNames = selectedPlayers.filter(p => dupNums.includes(p.number)).map(p => `#${p.number} ${p.name}`).join('、')
+      setConfirmError(`背番号が重複しています：${dupNames}。選手登録を確認してください。`)
       return
     }
     setConfirmError('')
