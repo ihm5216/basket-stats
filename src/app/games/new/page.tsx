@@ -9,6 +9,10 @@ import { Suspense } from 'react'
 
 type PlayerRow = { number: string; name: string; selected: boolean }
 
+function toHankaku(str: string): string {
+  return str.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
+}
+
 function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (p: PlayerRow[]) => void }) {
   const [newNum, setNewNum] = useState('')
   const [newName, setNewName] = useState('')
@@ -16,7 +20,7 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
   function add(e: React.FormEvent) {
     e.preventDefault()
     if (!newName.trim()) return
-    onChange([...players, { number: newNum.trim(), name: newName.trim(), selected: true }])
+    onChange([...players, { number: toHankaku(newNum), name: newName.trim(), selected: true }])
     setNewNum('')
     setNewName('')
   }
@@ -51,8 +55,9 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
                   <input
                     type="text"
                     value={p.number}
-                    onChange={e => onChange(players.map((x, j) => j === i ? { ...x, number: e.target.value } : x))}
+                    onChange={e => onChange(players.map((x, j) => j === i ? { ...x, number: toHankaku(e.target.value) } : x))}
                     placeholder="—"
+                    inputMode="numeric"
                     className="input-field w-full text-center text-orange-400 font-bold px-1 py-1.5 text-sm"
                     maxLength={3}
                   />
@@ -78,7 +83,8 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
             className="input-field w-full text-center text-orange-400 font-bold px-1 py-2 text-sm"
             placeholder="番号"
             value={newNum}
-            onChange={e => setNewNum(e.target.value)}
+            onChange={e => setNewNum(toHankaku(e.target.value))}
+            inputMode="numeric"
             maxLength={3}
           />
         </div>

@@ -53,12 +53,18 @@ export default function TeamPage() {
 
   async function addPlayer(e: React.FormEvent) {
     e.preventDefault()
-    if (!newPlayerName.trim()) return
+    const trimmedName = newPlayerName.trim()
+    if (!trimmedName) return
+    // 同じ名前の選手が既にいる場合はエラー
+    if (players.some(p => p.name === trimmedName)) {
+      alert(`「${trimmedName}」は既に登録されています。同じ名前の選手は登録できません。`)
+      return
+    }
     setAddingPlayer(true)
     const supabase = createClient()
     const { data } = await supabase
       .from('players')
-      .insert({ team_id: id, name: newPlayerName.trim(), number: newPlayerNumber.trim() })
+      .insert({ team_id: id, name: trimmedName, number: newPlayerNumber.trim() })
       .select()
       .single()
 
@@ -66,6 +72,7 @@ export default function TeamPage() {
       setPlayers(prev => [...prev, data].sort((a, b) => Number(a.number) - Number(b.number)))
       setNewPlayerName('')
       setNewPlayerNumber('')
+      setNumberWarning(false)
     }
     setAddingPlayer(false)
   }
