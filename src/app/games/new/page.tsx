@@ -16,6 +16,13 @@ function toHankaku(str: string): string {
 function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (p: PlayerRow[]) => void }) {
   const [newNum, setNewNum] = useState('')
   const [newName, setNewName] = useState('')
+  const [numWarn, setNumWarn] = useState(false)
+
+  function handleNumChange(raw: string, setter: (v: string) => void) {
+    if (/[０-９]/.test(raw)) setNumWarn(true)
+    else setNumWarn(false)
+    setter(toHankaku(raw))
+  }
 
   function add(e: React.FormEvent) {
     e.preventDefault()
@@ -23,6 +30,7 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
     onChange([...players, { number: toHankaku(newNum), name: newName.trim(), selected: true }])
     setNewNum('')
     setNewName('')
+    setNumWarn(false)
   }
 
   return (
@@ -55,7 +63,12 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
                   <input
                     type="text"
                     value={p.number}
-                    onChange={e => onChange(players.map((x, j) => j === i ? { ...x, number: toHankaku(e.target.value) } : x))}
+                    onChange={e => {
+                      const raw = e.target.value
+                      if (/[０-９]/.test(raw)) setNumWarn(true)
+                      else setNumWarn(false)
+                      onChange(players.map((x, j) => j === i ? { ...x, number: toHankaku(raw) } : x))
+                    }}
                     placeholder="—"
                     inputMode="numeric"
                     className="input-field w-full text-center text-orange-400 font-bold px-1 py-1.5 text-sm"
@@ -71,6 +84,9 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
           </div>
         </>
       )}
+      {numWarn && (
+        <p className="text-xs text-yellow-400 mb-2">⚠ 全角数字が入力されました。背番号は半角数字（例: 10）で入力してください。自動変換しました。</p>
+      )}
       <form onSubmit={add} className="flex gap-2">
         <input
           className="input-field flex-1 min-w-0 py-2 text-sm"
@@ -80,10 +96,10 @@ function PlayerEditor({ players, onChange }: { players: PlayerRow[]; onChange: (
         />
         <div className="w-14 flex-shrink-0">
           <input
-            className="input-field w-full text-center text-orange-400 font-bold px-1 py-2 text-sm"
+            className={`input-field w-full text-center text-orange-400 font-bold px-1 py-2 text-sm ${numWarn ? 'border-yellow-400' : ''}`}
             placeholder="番号"
             value={newNum}
-            onChange={e => setNewNum(toHankaku(e.target.value))}
+            onChange={e => handleNumChange(e.target.value, setNewNum)}
             inputMode="numeric"
             maxLength={3}
           />
