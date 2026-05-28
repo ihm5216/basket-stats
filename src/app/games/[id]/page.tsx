@@ -632,13 +632,14 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 }
 
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onFoulEdit }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
   oppFoulsMap?: Record<string, OppFoulData>
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
+  onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [addDialog, setAddDialog] = useState(false)
@@ -646,6 +647,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
   const [addPoints, setAddPoints] = useState<1|2|3>(2)
   const [addQuarter, setAddQuarter] = useState(1)
+  const [foulDeleteConfirm, setFoulDeleteConfirm] = useState<{playerId: string; isHome: boolean; foulType: keyof OppFoulData; notation: string; playerNum: string} | null>(null)
+  const [foulAddModal, setFoulAddModal] = useState<{playerId: string; isHome: boolean; playerNum: string} | null>(null)
   const qScores = useMemo(() => [1,2,3,4].map(q => ({
     us:  scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0),
     opp: scoreEvents.filter(e => e.quarter === q && e.team === 'opponent').reduce((s,e) => s+e.points, 0),
@@ -721,6 +724,14 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   const B = '1px solid #aaa'
   const TB = '2px solid #111'
+
+  function foulKeyFromPart(part: string): keyof OppFoulData {
+    if (part === 'T') return 'technical_fouls'
+    if (part === 'P3') return 'fouls_3ft'
+    if (part === 'P2') return 'fouls_2ft'
+    if (part === 'P1') return 'fouls_1ft'
+    return 'fouls_plain'
+  }
 
   // ランニングスコアのセル (flatMap で使うためインライン)
   function markContent(mark: RunMarkData | undefined): React.ReactNode {
@@ -811,11 +822,24 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                       </td>
                     )
                   })}
-                  {[1,2,3,4,5].map(f => (
-                    <td key={f} style={{border:B, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px'}}>
-                      {foulParts[f-1] ?? ''}
-                    </td>
-                  ))}
+                  {[1,2,3,4,5].map(f => {
+                    const part = foulParts[f-1]
+                    const isEmpty = !part && f === fouls + 1 && onFoulEdit
+                    return (
+                      <td key={f}
+                        onClick={onFoulEdit ? (
+                          part
+                            ? () => setFoulDeleteConfirm({ playerId: p.id, isHome, foulType: foulKeyFromPart(part), notation: part, playerNum: p.number })
+                            : isEmpty
+                              ? () => setFoulAddModal({ playerId: p.id, isHome, playerNum: p.number })
+                              : undefined
+                        ) : undefined}
+                        style={{border:B, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px', cursor: onFoulEdit && (part || isEmpty) ? 'pointer' : 'default', background: part && onFoulEdit ? 'rgba(220,38,38,0.07)' : isEmpty ? 'rgba(0,180,0,0.05)' : undefined}}
+                      >
+                        {part ?? (isEmpty ? <span style={{color:'#aaa', fontSize:9, fontWeight:'normal'}}>＋</span> : '')}
+                      </td>
+                    )
+                  })}
                 </tr>
               )
             })}
@@ -1091,12 +1115,52 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           </div>
         </div>
       )}
+
+      {/* ファウル削除確認ダイアログ */}
+      {foulDeleteConfirm && (
+        <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:201}} onClick={() => setFoulDeleteConfirm(null)}>
+          <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:300, width:'90%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontWeight:'bold', fontSize:14, marginBottom:8}}>このファウルを削除しますか？</div>
+            <div style={{fontSize:13, marginBottom:6}}>
+              {foulDeleteConfirm.isHome ? 'チームA' : 'チームB'}　#{foulDeleteConfirm.playerNum}
+            </div>
+            <div style={{fontSize:20, fontWeight:'bold', color:'#c00', marginBottom:16}}>
+              {foulDeleteConfirm.notation}
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              <button onClick={() => setFoulDeleteConfirm(null)} style={{flex:1, padding:'8px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer'}}>キャンセル</button>
+              <button onClick={() => { onFoulEdit?.(foulDeleteConfirm.playerId, foulDeleteConfirm.isHome, -1, foulDeleteConfirm.foulType); setFoulDeleteConfirm(null) }} style={{flex:1, padding:'8px', border:'none', borderRadius:6, background:'#dc2626', color:'white', fontWeight:'bold', cursor:'pointer'}}>削除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ファウル追加ダイアログ */}
+      {foulAddModal && (
+        <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:201}} onClick={() => setFoulAddModal(null)}>
+          <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:320, width:'92%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontWeight:'bold', fontSize:14, marginBottom:8}}>ファウルを追加</div>
+            <div style={{fontSize:13, color:'#555', marginBottom:14}}>
+              {foulAddModal.isHome ? 'チームA' : 'チームB'}　#{foulAddModal.playerNum}
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, marginBottom:16}}>
+              {([['P','fouls_plain'],['P1','fouls_1ft'],['P2','fouls_2ft'],['P3','fouls_3ft'],['T','technical_fouls']] as [string, keyof OppFoulData][]).map(([label, key]) => (
+                <button key={key}
+                  onClick={() => { onFoulEdit?.(foulAddModal.playerId, foulAddModal.isHome, 1, key); setFoulAddModal(null) }}
+                  style={{padding:'10px 2px', borderRadius:6, border:'2px solid #c00', background:'#fff1f0', color:'#c00', fontWeight:'bold', fontSize:13, cursor:'pointer'}}
+                >{label}</button>
+              ))}
+            </div>
+            <button onClick={() => setFoulAddModal(null)} style={{width:'100%', padding:'8px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer'}}>キャンセル</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── 試合終了後スタッツ一覧 ──────────────────────────────────────────────────
-function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent }: {
+function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onFoulEdit }: {
   game: Game
   players: Player[]
   statsMap: Map<string, PlayerStat>
@@ -1104,6 +1168,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   oppPlayerList: OppPlayer[]
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
+  onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
   // 試合に登録された選手のうち、スタッツが存在する選手のみ表示
@@ -1280,6 +1345,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             gameId={game.id}
             onDeleteEvent={onDeleteEvent}
             onAddEvent={onAddEvent}
+            onFoulEdit={onFoulEdit}
           />
         )}
       </div>
@@ -1426,7 +1492,7 @@ export default function GamePage() {
   const [oppPlayerList, setOppPlayerList] = useState<OppPlayer[]>([])
   const [selectedOppPlayer, setSelectedOppPlayer] = useState<OppPlayer | null>(null)
   const [courtSetupMode, setCourtSetupMode] = useState(false)
-  const [recordingTab, setRecordingTab] = useState<'record' | 'running' | 'scoresheet'>('record')
+  const [recordingTab, setRecordingTab] = useState<'record' | 'scoresheet'>('record')
   const [opponentPlayerKeys, setOpponentPlayerKeys] = useState<Set<string>>(new Set())
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveStatsRef = useRef<() => Promise<void>>(async () => {})
@@ -1803,6 +1869,32 @@ export default function GamePage() {
     }
   }
 
+  function handleFoulEdit(playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) {
+    if (isHome) {
+      // 自チーム: pending経由でスタッツを更新
+      const gid = ++gidRef.current
+      skipUndoStackRef.current = true
+      setPending(prev => [...prev, { playerId, key: foulType as StatKey, delta, gid }])
+      setTeamFouls(prev => Math.max(0, prev + delta))
+    } else {
+      // 相手チーム: oppFoulsMapを更新してlocalStorageにも保存
+      setOppTeamFouls(prev => Math.max(0, prev + delta))
+      setOppFoulsMap(prev => {
+        const current = prev[playerId] ?? emptyOppFoul()
+        const updated: OppFoulData = { ...current, [foulType]: Math.max(0, current[foulType] + delta) }
+        const next = { ...prev, [playerId]: updated }
+        // scoresheet_ov に永続化
+        try {
+          const raw = localStorage.getItem(`scoresheet_ov_${id}`)
+          const ov = raw ? JSON.parse(raw) : {}
+          ov.oppPlayers = { ...(ov.oppPlayers ?? {}), [playerId]: updated }
+          localStorage.setItem(`scoresheet_ov_${id}`, JSON.stringify(ov))
+        } catch { /* ignore */ }
+        return next
+      })
+    }
+  }
+
   function halftimeReset() {
     setTeamFouls(0)
     setOppTeamFouls(0)
@@ -2102,7 +2194,7 @@ export default function GamePage() {
   if (!game) return null
 
   if (game.is_finished) {
-    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} />
+    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onFoulEdit={handleFoulEdit} />
   }
 
   if (courtSetupMode) {
@@ -2249,19 +2341,13 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* 行4: 記録 / ランニングスコア / スコアシート タブ */}
+        {/* 行4: スタッツ記録 / スコアシート タブ */}
         <div className="flex border-t border-[var(--card-border)]">
           <button
             onClick={() => setRecordingTab('record')}
             className={`flex-1 py-2 text-xs font-medium border-b-2 transition-colors ${recordingTab === 'record' ? 'border-orange-500 text-orange-500' : 'border-transparent text-[var(--muted)]'}`}
           >
             スタッツ記録
-          </button>
-          <button
-            onClick={() => setRecordingTab('running')}
-            className={`flex-1 py-2 text-xs font-medium border-b-2 transition-colors ${recordingTab === 'running' ? 'border-orange-500 text-orange-500' : 'border-transparent text-[var(--muted)]'}`}
-          >
-            ランニング
           </button>
           <button
             onClick={() => setRecordingTab('scoresheet')}
@@ -2273,16 +2359,7 @@ export default function GamePage() {
       </div>
 
       {/* ─── メインエリア ─── */}
-      {recordingTab === 'running' ? (
-        <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-          <RunningScoreView
-            events={scoreEvents}
-            teamName="自チーム"
-            opponentName={game.opponent}
-            players={players}
-          />
-        </div>
-      ) : recordingTab === 'scoresheet' ? (
+      {recordingTab === 'scoresheet' ? (
         <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
           <JBASheet
             game={game}
@@ -2296,6 +2373,7 @@ export default function GamePage() {
             oppFoulsMap={oppFoulsMap}
             onDeleteEvent={handleDeleteScoreEvent}
             onAddEvent={handleAddScoreEvent}
+            onFoulEdit={handleFoulEdit}
           />
         </div>
       ) : (
