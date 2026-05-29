@@ -389,6 +389,16 @@ export default function TeamPage() {
 function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
   const [stats, setStats] = useState<ReturnType<typeof aggregateSeasonStats>>([])
   const [loading, setLoading] = useState(true)
+  const [allStats, setAllStats] = useState<Parameters<typeof aggregateSeasonStats>[0]>([])
+  const [filterMonth, setFilterMonth] = useState<string>('all')
+
+  // 月ごとのオプション生成（試合のある月のみ）
+  const monthOptions = Array.from(
+    new Set(games.map(g => g.game_date.slice(0, 7)))
+  ).sort().reverse()
+
+  // フィルター適用後の試合
+  const filteredGames = filterMonth === 'all' ? games : games.filter(g => g.game_date.startsWith(filterMonth))
 
   useEffect(() => {
     async function load() {
@@ -400,6 +410,7 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
         .in('game_id', games.map(g => g.id))
 
       if (data) {
+        setAllStats(data as Parameters<typeof aggregateSeasonStats>[0])
         setStats(aggregateSeasonStats(data as Parameters<typeof aggregateSeasonStats>[0]))
       }
       setLoading(false)
@@ -407,12 +418,47 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
     load()
   }, [games])
 
+  // フィルター変更時に再集計
+  useEffect(() => {
+    if (allStats.length === 0) return
+    const filteredIds = new Set(filteredGames.map(g => g.id))
+    const filtered = allStats.filter(s => filteredIds.has(s.game_id))
+    setStats(aggregateSeasonStats(filtered))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMonth, allStats])
+
   if (loading) return <div className="text-[var(--muted)] text-center py-8">集計中...</div>
   if (stats.length === 0) return <div className="card text-center py-12 text-[var(--muted)]">試合データがありません</div>
 
+  const formatMonth = (m: string) => {
+    const [y, mo] = m.split('-')
+    return `${y}年${parseInt(mo)}月`
+  }
+
   return (
     <div>
-      <h2 className="font-semibold text-white mb-4">シーズン統計（全{games.length}試合）</h2>
+      {/* 期間フィルター */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-xs text-[var(--muted)]">期間:</span>
+        <button
+          onClick={() => setFilterMonth('all')}
+          className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterMonth === 'all' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)]'}`}
+        >
+          全期間（{games.length}試合）
+        </button>
+        {monthOptions.map(m => (
+          <button
+            key={m}
+            onClick={() => setFilterMonth(m)}
+            className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterMonth === m ? 'bg-orange-500 border-orange-500 text-white' : 'bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)]'}`}
+          >
+            {formatMonth(m)}（{games.filter(g => g.game_date.startsWith(m)).length}試合）
+          </button>
+        ))}
+      </div>
+      <h2 className="font-semibold text-white mb-4">
+        シーズン統計（{filteredGames.length}試合）
+      </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">
           <thead>

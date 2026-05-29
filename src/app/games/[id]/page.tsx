@@ -649,10 +649,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const [addQuarter, setAddQuarter] = useState(1)
   const [foulDeleteConfirm, setFoulDeleteConfirm] = useState<{playerId: string; isHome: boolean; foulType: keyof OppFoulData; notation: string; playerNum: string} | null>(null)
   const [foulAddModal, setFoulAddModal] = useState<{playerId: string; isHome: boolean; playerNum: string} | null>(null)
-  const qScores = useMemo(() => [1,2,3,4].map(q => ({
+  const maxQInSheet = useMemo(() => Math.max(4, ...scoreEvents.map(e => e.quarter)), [scoreEvents])
+  const qScores = useMemo(() => Array.from({length: maxQInSheet}, (_, i) => i + 1).map(q => ({
     us:  scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0),
     opp: scoreEvents.filter(e => e.quarter === q && e.team === 'opponent').reduce((s,e) => s+e.points, 0),
-  })), [scoreEvents])
+  })), [scoreEvents, maxQInSheet])
   const totalUs  = qScores.reduce((s,q) => s+q.us, 0)
   const totalOpp = qScores.reduce((s,q) => s+q.opp, 0)
 
@@ -913,17 +914,20 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <div style={{background:'#e8e8e0', fontSize:6, fontWeight:'bold', padding:'1px 4px', borderBottom:'1px solid #aaa'}}>
               クォータースコア / QUARTER SCORE
             </div>
-            <div style={{display:'flex', padding:'2px 4px', gap:4}}>
-              {[1,2,3,4].map(q => (
-                <div key={q} style={{flex:1, textAlign:'center', borderRight: q<4 ? '1px solid #ddd' : 'none', paddingRight:3}}>
-                  <div style={{fontSize:5, color:'#888', fontWeight:'bold'}}>Q{q}</div>
-                  <div style={{fontSize:8, fontWeight:'bold'}}>
-                    <span style={{color:'#c00'}}>{qScores[q-1].us}</span>
-                    <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
-                    <span style={{color:'#00c'}}>{qScores[q-1].opp}</span>
+            <div style={{display:'flex', padding:'2px 4px', gap:4, flexWrap:'wrap'}}>
+              {qScores.map((qs, i) => {
+                const q = i + 1
+                return (
+                  <div key={q} style={{flex:1, minWidth:28, textAlign:'center', borderRight: q<maxQInSheet ? '1px solid #ddd' : 'none', paddingRight:3}}>
+                    <div style={{fontSize:5, color:'#888', fontWeight:'bold'}}>{q <= 4 ? `Q${q}` : `OT${q-4}`}</div>
+                    <div style={{fontSize:8, fontWeight:'bold'}}>
+                      <span style={{color: q%2===1 ? '#c00' : '#111'}}>{qs.us}</span>
+                      <span style={{color:'#aaa', margin:'0 1px'}}>-</span>
+                      <span style={{color:'#00c'}}>{qs.opp}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
               <div style={{textAlign:'center', borderLeft:'2px solid #aaa', paddingLeft:6}}>
                 <div style={{fontSize:5, color:'#888', fontWeight:'bold'}}>合計</div>
                 <div style={{fontSize:10, fontWeight:'bold'}}>
@@ -1512,12 +1516,19 @@ export default function GamePage() {
   const [foulOppDialog, setFoulOppDialog] = useState<{ isOpen: boolean; playerKey?: string; playerName?: string }>({ isOpen: false })
   const [oppTeamFouls, setOppTeamFouls] = useState(0)
   const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, OppFoulData>>({})
+  // 5ファウルアウト通知
+  const [foulOutAlert, setFoulOutAlert] = useState<{ playerName: string; playerNumber: string } | null>(null)
+  // ゲームクロック（10分 = 600秒）
+  const [timerSeconds, setTimerSeconds] = useState(600)
+  const [timerActive, setTimerActive] = useState(false)
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Q毎の得点（Q ボタンポップアップ用）
-  const qScores = useMemo(() => [1,2,3,4].map(q => ({
+  // Q毎の得点（OT含む動的集計）
+  const maxQuarterInEvents = useMemo(() => Math.max(4, ...scoreEvents.map(e => e.quarter), currentQuarter), [scoreEvents, currentQuarter])
+  const qScores = useMemo(() => Array.from({length: maxQuarterInEvents}, (_, i) => i + 1).map(q => ({
     us:  scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0),
     opp: scoreEvents.filter(e => e.quarter === q && e.team === 'opponent').reduce((s,e) => s+e.points, 0),
-  })), [scoreEvents])
+  })), [scoreEvents, maxQuarterInEvents])
 
   // pending を statsMap に反映した実効値マップ（scoresheet との整合性確保）
   const effectiveStatsMap = useMemo(() => {
@@ -1763,6 +1774,13 @@ export default function GamePage() {
   function recordFoulWithFT(playerId: string, ftCount: number) {
     const foulKey: StatKey = ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
     const gid = ++gidRef.current
+    // 5ファウルアウト検出（このファウルを加えた後の合計で判定）
+    const currentStat = getEffectiveStat(playerId)
+    const newTotal = getTotalFouls(currentStat) + 1
+    if (newTotal >= 5) {
+      const p = players.find(pl => pl.id === playerId)
+      if (p) setFoulOutAlert({ playerName: p.name, playerNumber: p.number })
+    }
     setPending(prev => [...prev, { playerId, key: foulKey, delta: 1, gid }])
     setTeamFouls(prev => prev + 1)
     setFoulDialog({ isOpen: false })
@@ -1775,6 +1793,9 @@ export default function GamePage() {
     // テクニカルファウルは直接記録（FTなし）
     if (btn.key === 'technical_fouls') {
       const gid = ++gidRef.current
+      const currentStat = getEffectiveStat(selectedPlayer.id)
+      const newTotal = getTotalFouls(currentStat) + 1
+      if (newTotal >= 5) setFoulOutAlert({ playerName: selectedPlayer.name, playerNumber: selectedPlayer.number })
       setPending(prev => [...prev, { playerId: selectedPlayer.id, key: 'technical_fouls', delta: 1, gid }])
       setTeamFouls(prev => prev + 1)
       setSelectedPlayer(null)
@@ -2190,12 +2211,35 @@ export default function GamePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { saveStatsRef.current = saveStats }, [saveStats])
 
+  // ゲームクロック カウントダウン
+  useEffect(() => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
+    timerIntervalRef.current = null
+    if (!timerActive) return
+    timerIntervalRef.current = setInterval(() => {
+      setTimerSeconds(s => {
+        if (s <= 1) { setTimerActive(false); return 0 }
+        return s - 1
+      })
+    }, 1000)
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current) }
+  }, [timerActive])
+
+  function formatTimer(s: number) {
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
+  }
+
   async function advanceQuarter() {
-    if (currentQuarter >= 4) return
     await saveStats()
     setTeamFouls(0)
-    setHomeTimeouts(0) // Qリセット
-    setOppTimeouts(0)
+    // タイムアウトはハーフタイム（Q2→Q3）とOT開始時にリセット
+    if (currentQuarter === 2 || currentQuarter >= 4) {
+      setHomeTimeouts(0)
+      setOppTimeouts(0)
+    }
+    // タイマーをリセット
+    setTimerActive(false)
+    setTimerSeconds(600)
     setRecordingTab('scoresheet')
     setUndoStack([])
     localStorage.removeItem(`undo_stack_${id}`)
@@ -2317,14 +2361,14 @@ export default function GamePage() {
           ) : <div className="w-16" />}
         </div>
 
-        {/* 行2: クォータータブ + メンバー変更 */}
+        {/* 行2: クォータータブ + タイマー + メンバー変更 */}
         <div className="flex items-center gap-1.5 px-4 pb-1">
-          {([1, 2, 3, 4] as const).map(q => (
+          {Array.from({length: Math.max(4, currentQuarter)}, (_, i) => i + 1).map(q => (
             <button
               key={q}
               disabled={q > currentQuarter}
               onClick={() => q <= currentQuarter ? setShowQScore(showQScore === q ? null : q) : undefined}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
+              className={`px-2 py-1 rounded-full text-xs font-bold transition-colors ${
                 q === currentQuarter
                   ? 'bg-orange-500 text-white active:opacity-80'
                   : q < currentQuarter
@@ -2332,9 +2376,29 @@ export default function GamePage() {
                   : 'opacity-30 bg-[var(--card)] text-[var(--muted)] border border-[var(--card-border)]'
               }`}
             >
-              Q{q}
+              {q <= 4 ? `Q${q}` : `OT${q - 4}`}
             </button>
           ))}
+          {/* ゲームクロック */}
+          {!game.is_finished && (
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                onClick={() => setTimerActive(a => !a)}
+                className={`text-[10px] font-bold tabular-nums px-2 py-1 rounded-full border transition-colors ${
+                  timerActive ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                  : timerSeconds === 0 ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                  : 'bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)]'
+                }`}
+              >
+                {timerActive ? '⏸' : '▶'} {formatTimer(timerSeconds)}
+              </button>
+              <button
+                onClick={() => { setTimerActive(false); setTimerSeconds(600) }}
+                className="text-[10px] text-[var(--muted)] px-1"
+                title="タイマーリセット"
+              >↺</button>
+            </div>
+          )}
           <div className="flex-1" />
           {!game.is_finished && (
             <button
@@ -2365,13 +2429,13 @@ export default function GamePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[1,2,3,4].filter(q => q <= showQScore).map(q => {
-                    const qs = qScores[q-1]
+                  {Array.from({length: showQScore}, (_, i) => i + 1).map(q => {
+                    const qs = qScores[q-1] ?? { us: 0, opp: 0 }
                     cumUs += qs.us; cumOpp += qs.opp
                     const isLast = q === showQScore
                     return (
                       <tr key={q} className={`border-b border-[var(--card-border)]/40 ${isLast ? 'bg-orange-500/10 font-bold' : ''}`}>
-                        <td className="py-1.5 px-3 text-[var(--muted)]">Q{q}</td>
+                        <td className="py-1.5 px-3 text-[var(--muted)]">{q <= 4 ? `Q${q}` : `OT${q-4}`}</td>
                         <td className="py-1.5 px-2 text-center text-orange-400">{qs.us}</td>
                         <td className="py-1.5 px-2 text-center text-blue-400">{qs.opp}</td>
                         <td className="py-1.5 px-3 text-center text-white font-bold tabular-nums">{cumUs} - {cumOpp}</td>
@@ -2384,45 +2448,52 @@ export default function GamePage() {
           )
         })()}
 
-        {/* 行3: 相手スコア / チームファウル / HTリセット */}
+        {/* 行3: 相手スコア / チームファウル / 前半終了リセット */}
         <div className="flex items-center justify-between px-4 pb-1">
           <div className="flex items-center gap-1.5">
             <button onClick={() => updateOpponentScore(-1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">-</button>
             <span className="text-xs text-[var(--muted)] w-14 text-center">相手 {game.opponent_score}</span>
             <button onClick={() => updateOpponentScore(1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+</button>
           </div>
-          <div className="flex gap-1.5">
-            <div className={`text-xs px-2 py-1 rounded-full ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
-              自F: {teamFouls}
+          <div className="flex gap-1.5 items-center">
+            <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
+              自F: {teamFouls}{teamFouls >= 5 && <span className="text-[9px] font-bold">ペナルティ</span>}
             </div>
-            <div className={`text-xs px-2 py-1 rounded-full ${oppTeamFouls >= 5 ? 'bg-blue-500/20 text-blue-400' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
-              相F: {oppTeamFouls}
+            <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${oppTeamFouls >= 5 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
+              相F: {oppTeamFouls}{oppTeamFouls >= 5 && <span className="text-[9px] font-bold">ペナルティ</span>}
             </div>
             <button
               onClick={halftimeReset}
               className="text-xs px-2 py-1 rounded-full bg-[var(--card)] text-[var(--muted)] border border-[var(--card-border)]"
             >
-              {halfTimeReset ? '✓ リセット' : 'HT'}
+              {halfTimeReset ? '✓ HT済' : '前半終了'}
             </button>
           </div>
         </div>
 
-        {/* 行4: タイムアウト */}
-        <div className="flex items-center gap-3 px-4 pb-2">
-          <span className="text-[10px] text-[var(--muted)]">TO:</span>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-orange-400 font-bold">自</span>
-            <button onClick={() => setHomeTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
-            <span className="w-5 text-center text-white text-xs font-bold tabular-nums">{homeTimeouts}</span>
-            <button onClick={() => setHomeTimeouts(t => t + 1)} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">+</button>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-blue-400 font-bold">相</span>
-            <button onClick={() => setOppTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
-            <span className="w-5 text-center text-white text-xs font-bold tabular-nums">{oppTimeouts}</span>
-            <button onClick={() => setOppTimeouts(t => t + 1)} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">+</button>
-          </div>
-        </div>
+        {/* 行4: タイムアウト（JBA: 前後半各2回・OT各1回） */}
+        {(() => {
+          const toLimit = currentQuarter >= 5 ? 1 : 2  // OTは1回、前後半各2回
+          const homeOver = homeTimeouts >= toLimit
+          const oppOver = oppTimeouts >= toLimit
+          return (
+            <div className="flex items-center gap-2 px-4 pb-2">
+              <span className="text-[10px] text-[var(--muted)] flex-shrink-0">タイムアウト</span>
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${homeOver ? 'bg-red-500/10 border border-red-500/30' : ''}`}>
+                <span className={`text-[10px] font-bold ${homeOver ? 'text-red-400' : 'text-orange-400'}`}>自</span>
+                <button onClick={() => setHomeTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
+                <span className={`w-8 text-center text-xs font-bold tabular-nums ${homeOver ? 'text-red-400' : 'text-white'}`}>{homeTimeouts}/{toLimit}</span>
+                <button onClick={() => setHomeTimeouts(t => t + 1)} className={`w-5 h-5 rounded bg-[var(--card)] border text-white text-xs flex items-center justify-center leading-none ${homeOver ? 'border-red-500/50 text-red-400' : 'border-[var(--card-border)]'}`}>+</button>
+              </div>
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${oppOver ? 'bg-red-500/10 border border-red-500/30' : ''}`}>
+                <span className={`text-[10px] font-bold ${oppOver ? 'text-red-400' : 'text-blue-400'}`}>相</span>
+                <button onClick={() => setOppTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
+                <span className={`w-8 text-center text-xs font-bold tabular-nums ${oppOver ? 'text-red-400' : 'text-white'}`}>{oppTimeouts}/{toLimit}</span>
+                <button onClick={() => setOppTimeouts(t => t + 1)} className={`w-5 h-5 rounded bg-[var(--card)] border text-white text-xs flex items-center justify-center leading-none ${oppOver ? 'border-red-500/50 text-red-400' : 'border-[var(--card-border)]'}`}>+</button>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* 行4: スタッツ記録 / スコアシート タブ */}
         <div className="flex border-t border-[var(--card-border)]">
@@ -2484,6 +2555,8 @@ export default function GamePage() {
               <div className="flex flex-col gap-1.5">
                 {onCourtPlayers.map(player => {
                   const pts = calcPoints(getEffectiveStat(player.id))
+                  const fouls = getTotalFouls(getEffectiveStat(player.id))
+                  const isFouledOut = fouls >= 5
                   const isSelected = selectedPlayer?.id === player.id
                   return (
                     <button
@@ -2495,14 +2568,18 @@ export default function GamePage() {
                         setSubInOppPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2.5 rounded-xl border transition-all active:scale-95 ${
-                        isSelected ? 'bg-orange-500 border-orange-500'
+                        isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60'
+                        : isSelected ? 'bg-orange-500 border-orange-500'
                         : subInPlayer ? 'bg-orange-500/10 border-orange-400 border-dashed'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className="text-[10px] text-orange-300 font-bold flex-shrink-0 w-8">#{player.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${isFouledOut ? 'text-red-400' : 'text-orange-300'}`}>#{player.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
-                      <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">{subInPlayer ? '↕' : `${pts}p`}</span>
+                      {isFouledOut
+                        ? <span className="text-[9px] text-red-400 font-bold flex-shrink-0 ml-1">退場</span>
+                        : <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">{subInPlayer ? '↕' : `${pts}p`}</span>
+                      }
                     </button>
                   )
                 })}
@@ -2604,8 +2681,11 @@ export default function GamePage() {
               </button>
             </div>
           ) : !subInPlayer && !subInOppPlayer ? (
-            <div className="card text-center py-4 text-sm text-[var(--muted)]">
-              上のコートから選手をタップしてください
+            <div className="card text-center py-4">
+              {onCourtPlayers.length === 0 && oppOnCourt.length === 0
+                ? <p className="text-sm text-[var(--muted)]">「メンバー変更」でコートの選手を設定してください</p>
+                : <p className="text-sm text-[var(--muted)]">コートの選手をタップしてスタッツ記録</p>
+              }
             </div>
           ) : null}
 
@@ -2679,9 +2759,14 @@ export default function GamePage() {
             >
               ↩ 取り消し{canUndo ? ` (${undoCount})` : ''}
             </button>
-            {!game.is_finished && currentQuarter < 4 && (
+            {!game.is_finished && (
               <button onClick={advanceQuarter} className="btn-secondary flex-1 text-sm py-2.5">
-                Q{currentQuarter + 1}へ →
+                {currentQuarter < 4
+                  ? `Q${currentQuarter + 1}へ →`
+                  : currentQuarter === 4
+                  ? 'OTへ →'
+                  : `OT${currentQuarter - 3}へ →`
+                }
               </button>
             )}
             {!game.is_finished && (
@@ -2725,6 +2810,26 @@ export default function GamePage() {
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="col-span-2 bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカルファウル (T)</button>
             </div>
             <button onClick={() => setFoulOppDialog({ isOpen: false })} className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all">キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* 5ファウルアウト通知 */}
+      {foulOutAlert && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setFoulOutAlert(null)}>
+          <div className="bg-[var(--card)] border border-red-500/50 rounded-2xl p-6 w-72 shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-5xl mb-3">🚨</div>
+            <h2 className="text-xl font-bold text-red-400 mb-1">ファウルアウト</h2>
+            <p className="text-white font-bold text-lg mb-1">
+              #{foulOutAlert.playerNumber} {foulOutAlert.playerName}
+            </p>
+            <p className="text-sm text-[var(--muted)] mb-5">5ファウル — 退場してください</p>
+            <button
+              onClick={() => setFoulOutAlert(null)}
+              className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-xl py-3 font-bold transition-all active:scale-95"
+            >
+              確認
+            </button>
           </div>
         </div>
       )}
