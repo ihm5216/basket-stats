@@ -774,7 +774,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:5,
                   background: rec ? '#fff0f0' : 'transparent', color: rec ? '#c00' : '#888',
                   fontWeight: rec ? 'bold' : 'normal'
-                }}>{rec ? `Q${q}:${rec.minute}` : `Q${q}`}</span>
+                }}>{rec ? `Q${q}:残${rec.minute}` : `Q${q}`}</span>
               )
             })}
             {(timeoutRecs?.some(r => r.quarter >= 5)) && (
@@ -793,7 +793,9 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <col style={{width:13}} />{/* No */}
             <col />{/* 氏名 */}
             <col style={{width:18}} />{/* 背番号 */}
-            <col style={{width:12}} /><col style={{width:12}} /><col style={{width:12}} /><col style={{width:12}} />{/* 出場Q */}
+            <col style={{width:12}} /><col style={{width:12}} /><col style={{width:12}} /><col style={{width:12}} />{/* Q1-4 */}
+            {maxQInSheet > 4 && Array.from({length: maxQInSheet-4}, (_,i) =>
+              <col key={i} style={{width:12}} />)}{/* OT列 */}
             <col style={{width:11}} /><col style={{width:11}} /><col style={{width:11}} /><col style={{width:11}} /><col style={{width:11}} />{/* ファウル */}
           </colgroup>
           <thead>
@@ -802,6 +804,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               <th style={{border:B, textAlign:'left', paddingLeft:2}}>選手氏名</th>
               <th style={{border:B, textAlign:'center'}}>No.</th>
               {['①','②','③','④'].map(s => <th key={s} style={{border:B, textAlign:'center'}}>{s}</th>)}
+              {maxQInSheet > 4 && Array.from({length: maxQInSheet-4}, (_,i) =>
+                <th key={`ot${i+1}`} style={{border:B, textAlign:'center', color:'#c00'}}>OT{i+1}</th>)}
               {['1','2','3','4','5'].map(s => <th key={s} style={{border:B, textAlign:'center'}}>{s}</th>)}
             </tr>
           </thead>
@@ -812,7 +816,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                 <tr key={i} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', color:'#bbb', fontSize:6}}>{i+1}</td>
                   <td style={{border:B}} /><td style={{border:B}} />
-                  {Array.from({length:9}).map((_,j) => <td key={j} style={{border:B}} />)}
+                  {Array.from({length: 4 + Math.max(0, maxQInSheet-4) + 5}).map((_,j) => <td key={j} style={{border:B}} />)}
                 </tr>
               )
               const stat = getStats(p.id)
@@ -826,11 +830,13 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     {p.name}
                   </td>
                   <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
-                  {[1,2,3,4].map(q => {
+                  {Array.from({length: maxQInSheet}, (_, qi) => {
+                    const q = qi + 1
                     const isStarter = starters.get(q)?.has(p.id)
                     const isSub = subs.get(q)?.has(p.id)
+                    const isOT = q > 4
                     return (
-                      <td key={q} style={{border:B, textAlign:'center', fontSize:11, color:(q===1||q===3)?'#c00':'#111', fontStyle:'italic'}}>
+                      <td key={q} style={{border:B, textAlign:'center', fontSize:11, color: isOT ? '#c00' : (q===1||q===3)?'#c00':'#111', fontStyle:'italic', background: isOT ? '#fff8f0' : undefined}}>
                         {isStarter ? '/' : isSub ? '╲' : ''}
                       </td>
                     )
@@ -1585,8 +1591,10 @@ export default function GamePage() {
   }, [pending, id])
 
   useEffect(() => {
+    // loading中（loadData実行前）は書かない → 初期render時の[]でデータを上書きするのを防止
+    if (loading) return
     localStorage.setItem(`score_events_${id}`, JSON.stringify(scoreEvents))
-  }, [scoreEvents, id])
+  }, [scoreEvents, id, loading])
 
   // scoreEvents が変わったら Supabase に遅延同期（LINE共有等のクロスデバイス対応）
   // pending による saveStats とは独立して動作し、opponent スコアのみの場合もカバーする
@@ -1825,8 +1833,9 @@ export default function GamePage() {
 
   function handleStatTap(btn: typeof STAT_BUTTONS[0]) {
     if (!selectedPlayer) return
-    // 退場選手はスタッツ記録不可（二重防御）
-    if (getTotalFouls(getEffectiveStat(selectedPlayer.id)) >= 5) {
+    // 退場選手は2P/3Pのみブロック（FTはファウルアウトした直後でも打てる）
+    if ((btn.key === 'fg2_made' || btn.key === 'fg3_made') &&
+        getTotalFouls(getEffectiveStat(selectedPlayer.id)) >= 5) {
       setSelectedPlayer(null)
       return
     }
@@ -2901,7 +2910,7 @@ export default function GamePage() {
             <h2 className="text-base font-bold text-white mb-1 text-center">
               {timeoutModal.team === 'home' ? '🟠 自チーム' : '🔵 相手チーム'} タイムアウト
             </h2>
-            <p className="text-xs text-[var(--muted)] text-center mb-4">残り何分で取りましたか？</p>
+            <p className="text-xs text-[var(--muted)] text-center mb-4">残り時間を選択してください（分）</p>
             <div className="grid grid-cols-6 gap-2 mb-4">
               {Array.from({length: 11}, (_, i) => i).map(m => (
                 <button
@@ -2919,7 +2928,7 @@ export default function GamePage() {
                   }}
                   className="py-2.5 rounded-xl bg-[var(--card)] border border-[var(--card-border)] text-white text-sm font-bold hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95"
                 >
-                  {m}
+                  残り{m}分
                 </button>
               ))}
             </div>
