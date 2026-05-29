@@ -6,58 +6,61 @@ export default function Home() {
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
 
       {/* ===== HERO ===== */}
-      <section className="relative min-h-screen flex flex-col overflow-hidden">
+      <section className="relative h-svh flex flex-col overflow-hidden" style={{minHeight: '580px'}}>
         {/* Background image */}
         <div className="absolute inset-0">
           <Image
             src="/hero-basketball.png"
             alt="バスケットボール試合"
             fill
-            className="object-cover object-center"
+            className="object-cover"
+            style={{ objectPosition: '60% center' }}
             priority
           />
-          {/* Gradient overlay: left side dark for text, right side semi-transparent */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#091929]/95 via-[#091929]/75 to-[#091929]/30" />
-          {/* Bottom fade */}
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#091929] to-transparent" />
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#091929]/95 via-[#091929]/75 to-[#091929]/20" />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#091929] to-transparent" />
         </div>
 
         {/* Header nav */}
-        <header className="relative z-20 flex items-center justify-between px-6 py-4">
+        <header className="relative z-20 flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🏀</span>
-            <span className="font-bold text-xl text-white tracking-tight">BasketStats</span>
+            <span className="text-xl">🏀</span>
+            <span className="font-bold text-lg text-white tracking-tight">BasketStats</span>
           </div>
           <div className="flex gap-2">
-            <Link href="/login" className="btn-secondary text-sm py-2 px-4">ログイン</Link>
-            <Link href="/signup" className="btn-primary text-sm py-2 px-4">無料で始める</Link>
+            <Link href="/login" className="btn-secondary text-sm py-1.5 px-3">ログイン</Link>
+            <Link href="/signup" className="btn-primary text-sm py-1.5 px-3">無料で始める</Link>
           </div>
         </header>
 
         {/* Hero content */}
-        <div className="relative z-10 flex-1 flex items-center px-6 md:px-16 py-20">
+        <div className="relative z-10 flex-1 flex items-center px-5 md:px-16">
           <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-6 border"
+            <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium mb-4 border"
               style={{ background: 'rgba(14,165,233,0.15)', borderColor: 'rgba(14,165,233,0.4)', color: '#38bdf8' }}>
               🎯 月500円でチーム全員が使い放題
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight mb-6">
+            <h1 className="text-3xl md:text-6xl font-bold text-white leading-tight mb-4">
               バスケの<br />スタッツを<br />
               <span style={{ color: '#38bdf8' }}>もっと簡単に</span>
             </h1>
 
-            <p className="text-lg mb-10" style={{ color: '#a8d4ec' }}>
+            <p className="text-sm md:text-lg mb-6 hidden sm:block" style={{ color: '#a8d4ec' }}>
               試合中にタップするだけで自動集計。<br />
               シーズン通算の確率・平均得点をひと目で確認。<br />
               URLを送るだけでチーム全員と共有できます。
             </p>
+            <p className="text-sm mb-6 sm:hidden" style={{ color: '#a8d4ec' }}>
+              タップするだけで自動集計。URLを共有するだけで全員が見られます。
+            </p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link href="/signup" className="btn-primary text-lg px-8 py-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link href="/signup" className="btn-primary px-6 py-3 text-base">
                 14日間無料で試す
               </Link>
-              <Link href="/share/demo" className="btn-secondary text-lg px-8 py-4">
+              <Link href="/share/demo" className="btn-secondary px-6 py-3 text-base">
                 デモを見る
               </Link>
             </div>

@@ -1495,6 +1495,7 @@ export default function GamePage() {
   const [recordingTab, setRecordingTab] = useState<'record' | 'scoresheet'>('record')
   const [opponentPlayerKeys, setOpponentPlayerKeys] = useState<Set<string>>(new Set())
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scoreEventsSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveStatsRef = useRef<() => Promise<void>>(async () => {})
   const gidRef = useRef(0)
   const skipUndoStackRef = useRef(false)
@@ -1543,6 +1544,24 @@ export default function GamePage() {
 
   useEffect(() => {
     localStorage.setItem(`score_events_${id}`, JSON.stringify(scoreEvents))
+  }, [scoreEvents, id])
+
+  // scoreEvents が変わったら Supabase に遅延同期（LINE共有等のクロスデバイス対応）
+  // pending による saveStats とは独立して動作し、opponent スコアのみの場合もカバーする
+  useEffect(() => {
+    if (scoreEvents.length === 0) return
+    if (scoreEventsSyncTimer.current) clearTimeout(scoreEventsSyncTimer.current)
+    scoreEventsSyncTimer.current = setTimeout(async () => {
+      const g = gameRef.current
+      if (!g || g.is_finished) return
+      const supabase = createClient()
+      await supabase.from('games').update({
+        score_events_json: scoreEvents,
+        our_score: Math.max(0, g.our_score),
+        opponent_score: Math.max(0, g.opponent_score),
+      }).eq('id', id)
+    }, 3000)
+    return () => { if (scoreEventsSyncTimer.current) clearTimeout(scoreEventsSyncTimer.current) }
   }, [scoreEvents, id])
 
   useEffect(() => {
@@ -1602,17 +1621,19 @@ export default function GamePage() {
     if (savedEvents) {
       try {
         const raw: ScoreEvent[] = JSON.parse(savedEvents)
-        // localStorage の our_score_after がずれていたら全イベントを補正
         const lastEvt = raw[raw.length - 1]
         let events = raw
-        if (lastEvt && lastEvt.our_score_after !== correctOurScore) {
+        // correctOurScore がイベント累計より大きい場合のみ正デルタ補正する
+        // （イベント側が大きい場合は縮小しない — スコアシートと header を一致させるため）
+        if (lastEvt && correctOurScore > lastEvt.our_score_after) {
           const delta = correctOurScore - lastEvt.our_score_after
           events = raw.map(e => ({ ...e, our_score_after: e.our_score_after + delta }))
         }
         setScoreEvents(events)
         if (events.length > 0 && !gameData.is_finished) {
           const last = events[events.length - 1]
-          setGame(prev => prev ? { ...prev, our_score: correctOurScore, opponent_score: last.opponent_score_after } : prev)
+          // our_score_after を正として header に反映（スコアシート合計と一致）
+          setGame(prev => prev ? { ...prev, our_score: last.our_score_after, opponent_score: last.opponent_score_after } : prev)
         } else if (!gameData.is_finished) {
           // scoreEvents があるが空の場合、最新スコアに同期
           setGame(prev => prev ? { ...prev, our_score: correctOurScore } : prev)
@@ -1635,8 +1656,8 @@ export default function GamePage() {
     }
 
     // game state を最新スコアで同期（scoreEvents 読み込み後）
-    // 常に correctOurScore に設定（DB 同期 + stats 合計の最大値）
-    if (!gameData.is_finished && gameData.our_score !== correctOurScore) {
+    // savedEvents/score_events_json がなく DB 値だけある場合に correctOurScore を反映
+    if (!gameData.is_finished && gameData.our_score !== correctOurScore && !savedEvents && !gameData.score_events_json) {
       setGame(prev => prev ? { ...prev, our_score: correctOurScore } : prev)
     }
 
