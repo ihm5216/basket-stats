@@ -1825,6 +1825,11 @@ export default function GamePage() {
 
   function handleStatTap(btn: typeof STAT_BUTTONS[0]) {
     if (!selectedPlayer) return
+    // 退場選手はスタッツ記録不可（二重防御）
+    if (getTotalFouls(getEffectiveStat(selectedPlayer.id)) >= 5) {
+      setSelectedPlayer(null)
+      return
+    }
 
     // テクニカルファウルは直接記録（FTなし）
     if (btn.key === 'technical_fouls') {
@@ -1855,7 +1860,9 @@ export default function GamePage() {
       setGame(prev => prev ? { ...prev, our_score: prev.our_score + pts } : prev)
       setScoreEvents(prev => {
         const last = prev[prev.length - 1]
-        const ourBefore = gameRef.current?.our_score ?? 0
+        // gameRef.current は次のrender後に更新されるため stale になりやすい
+        // 直前のスコアイベントの our_score_after を使う（連続得点でも正確）
+        const ourBefore = last ? last.our_score_after : (gameRef.current?.our_score ?? 0)
         const oppCurrent = last ? last.opponent_score_after : (gameRef.current?.opponent_score ?? 0)
         return [...prev, {
           gid, quarter: currentQuarter, team: 'us', points: pts,
@@ -2621,14 +2628,16 @@ export default function GamePage() {
                   return (
                     <button
                       key={player.id}
+                      disabled={isFouledOut}
                       onClick={() => {
+                        if (isFouledOut) return
                         if (subInPlayer) { substituteHome(player.id); return }
                         setSelectedPlayer(isSelected ? null : player)
                         setSelectedOppPlayer(null)
                         setSubInOppPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2.5 rounded-xl border transition-all active:scale-95 ${
-                        isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60'
+                        isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60 cursor-not-allowed'
                         : isSelected ? 'bg-orange-500 border-orange-500'
                         : subInPlayer ? 'bg-orange-500/10 border-orange-400 border-dashed'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
