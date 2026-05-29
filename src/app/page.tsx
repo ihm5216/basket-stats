@@ -47,29 +47,21 @@ export default function Home() {
               <span style={{ color: '#38bdf8' }}>もっと簡単に</span>
             </h1>
 
-            <p className="text-sm md:text-lg mb-6 hidden sm:block" style={{ color: '#a8d4ec' }}>
-              試合中にタップするだけで自動集計。<br />
-              シーズン通算の確率・平均得点をひと目で確認。<br />
+            <p className="text-sm md:text-lg mb-6" style={{ color: '#a8d4ec' }}>
+              試合中にタップするだけで自動集計。<br className="hidden sm:inline" />
+              JBA公式スコアシートをリアルタイム生成。<br className="hidden sm:inline" />
               URLを送るだけでチーム全員と共有できます。
-            </p>
-            <p className="text-sm mb-6 sm:hidden" style={{ color: '#a8d4ec' }}>
-              タップするだけで自動集計。URLを共有するだけで全員が見られます。
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Link href="/signup" className="btn-primary px-6 py-3 text-base">
                 14日間無料で試す
               </Link>
-              <Link href="/share/demo" className="btn-secondary px-6 py-3 text-base">
-                デモを見る
+              <Link href="/login" className="btn-secondary px-6 py-3 text-base">
+                ログインして試合記録へ
               </Link>
             </div>
           </div>
-        </div>
-
-        {/* Scroll hint */}
-        <div className="relative z-10 flex justify-center pb-8">
-          <div className="animate-bounce text-2xl" style={{ color: '#38bdf8' }}>↓</div>
         </div>
       </section>
 
@@ -92,7 +84,7 @@ export default function Home() {
       {/* ===== DIFFERENTIATORS ===== */}
       <section className="px-6 pb-20 max-w-3xl mx-auto w-full">
         <h2 className="text-2xl font-bold text-white text-center mb-8">
-          既存アプリで足りなかった機能を全部搭載
+          スコアラーが本当に欲しかった機能
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {differentiators.map((d) => (
@@ -130,16 +122,16 @@ export default function Home() {
 const features = [
   { icon: '📱', title: 'スマホ・iPad・PCで動く', desc: 'アプリのインストール不要。ブラウザだけで使えます。' },
   { icon: '⚡', title: 'タップで即記録', desc: '試合中に画面タップだけでスタッツ入力。選手を選んでボタンを押すだけ。' },
-  { icon: '📊', title: 'シーズン統計を自動集計', desc: 'FG%・3P%・平均得点など、全試合分を自動で集計・グラフ表示。' },
+  { icon: '📊', title: 'シーズン統計を自動集計', desc: 'FG%・3P%・平均得点など、全試合分を自動で集計。JBA公式スコアシートも生成。' },
 ]
 
 const differentiators = [
-  'シーズン・期間別の統計集計',
+  'JBA公式スコアシートをリアルタイム生成',
+  'OT（延長戦）対応・5ファウルアウト自動通知',
+  'LINE共有で別デバイスからリアルタイム閲覧',
   '個別スタッツを後から修正可能',
   'オフラインでも記録（後で同期）',
-  '試合日付を後から手動設定',
-  'シュート成功時に試投を自動カウント',
   'ハーフタイムのチームファウルリセット',
+  'タイムアウト残数の管理',
   'CSVエクスポート対応',
-  'プレータイム（出場時間）を記録・集計',
 ]
