@@ -31,6 +31,7 @@ export type Game = {
   score_events_json?: unknown
   opponent_players?: unknown
   home_player_ids?: unknown
+  court_data_json?: unknown
 }
 
 export type PlayerStat = {

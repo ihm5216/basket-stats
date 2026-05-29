@@ -817,7 +817,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     const isStarter = starters.get(q)?.has(p.id)
                     const isSub = subs.get(q)?.has(p.id)
                     return (
-                      <td key={q} style={{border:B, textAlign:'center', fontSize:11, color:'#c00', fontStyle:'italic'}}>
+                      <td key={q} style={{border:B, textAlign:'center', fontSize:11, color:(q===1||q===3)?'#c00':'#111', fontStyle:'italic'}}>
                         {isStarter ? '/' : isSub ? '╲' : ''}
                       </td>
                     )
@@ -1678,6 +1678,32 @@ export default function GamePage() {
       }
     }
 
+    // court_data_json からコート/サブ/ファウルデータを復元（クロスデバイス対応）
+    if (gameData.court_data_json) {
+      try {
+        const cd = gameData.court_data_json as {
+          homeStarters?: Record<string, string[]>
+          oppStarters?: Record<string, string[]>
+          homeSubs?: Record<string, string[]>
+          oppSubs?: Record<string, string[]>
+          scoresheetOv?: unknown
+        }
+        for (let q = 1; q <= 4; q++) {
+          const qs = String(q)
+          if (!localStorage.getItem(`court_q${q}_${id}`) && cd.homeStarters?.[qs]?.length)
+            localStorage.setItem(`court_q${q}_${id}`, JSON.stringify(cd.homeStarters[qs]))
+          if (!localStorage.getItem(`court_opp_q${q}_${id}`) && cd.oppStarters?.[qs]?.length)
+            localStorage.setItem(`court_opp_q${q}_${id}`, JSON.stringify(cd.oppStarters[qs]))
+          if (!localStorage.getItem(`sub_q${q}_${id}`) && cd.homeSubs?.[qs]?.length)
+            localStorage.setItem(`sub_q${q}_${id}`, JSON.stringify(cd.homeSubs[qs]))
+          if (!localStorage.getItem(`sub_opp_q${q}_${id}`) && cd.oppSubs?.[qs]?.length)
+            localStorage.setItem(`sub_opp_q${q}_${id}`, JSON.stringify(cd.oppSubs[qs]))
+        }
+        if (!localStorage.getItem(`scoresheet_ov_${id}`) && cd.scoresheetOv)
+          localStorage.setItem(`scoresheet_ov_${id}`, JSON.stringify(cd.scoresheetOv))
+      } catch { /* ignore */ }
+    }
+
     // 相手ファウルマップを復元
     try {
       const ovRaw = localStorage.getItem(`scoresheet_ov_${id}`)
@@ -2105,13 +2131,31 @@ export default function GamePage() {
     }
 
     if (gameRef.current) {
-      // score_events_json も同時に保存してクロスデバイス同期
+      // score_events_json + court_data_json を同時保存してクロスデバイス同期
       const currentEvents = scoreEventsRef.current
+      const courtData = (() => {
+        const homeStarters: Record<string, string[]> = {}
+        const oppStarters: Record<string, string[]> = {}
+        const homeSubs: Record<string, string[]> = {}
+        const oppSubs: Record<string, string[]> = {}
+        for (let q = 1; q <= 4; q++) {
+          try {
+            const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
+            const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
+            const hsub = localStorage.getItem(`sub_q${q}_${id}`); if (hsub) homeSubs[q] = JSON.parse(hsub)
+            const osub = localStorage.getItem(`sub_opp_q${q}_${id}`); if (osub) oppSubs[q] = JSON.parse(osub)
+          } catch { /* ignore */ }
+        }
+        let scoresheetOv: unknown = null
+        try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
+        return { homeStarters, oppStarters, homeSubs, oppSubs, ...(scoresheetOv ? { scoresheetOv } : {}) }
+      })()
       await supabase.from('games')
         .update({
           our_score: Math.max(0, gameRef.current.our_score),
           opponent_score: Math.max(0, gameRef.current.opponent_score),
           ...(currentEvents.length > 0 ? { score_events_json: currentEvents } : {}),
+          court_data_json: courtData,
         })
         .eq('id', id)
     }
@@ -2153,13 +2197,31 @@ export default function GamePage() {
     await saveStats()
     const supabase = createClient()
 
-    // 相手選手・スコアイベントを games テーブルに永続化（クロスデバイス対応）
+    // 相手選手・スコアイベント・コートデータを games テーブルに永続化（クロスデバイス対応）
     const oppPlayersData = oppPlayerList.map(p => ({ number: p.number, name: p.name }))
+    const courtDataFinal = (() => {
+      const homeStarters: Record<string, string[]> = {}
+      const oppStarters: Record<string, string[]> = {}
+      const homeSubs: Record<string, string[]> = {}
+      const oppSubs: Record<string, string[]> = {}
+      for (let q = 1; q <= 4; q++) {
+        try {
+          const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
+          const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
+          const hsub = localStorage.getItem(`sub_q${q}_${id}`); if (hsub) homeSubs[q] = JSON.parse(hsub)
+          const osub = localStorage.getItem(`sub_opp_q${q}_${id}`); if (osub) oppSubs[q] = JSON.parse(osub)
+        } catch { /* ignore */ }
+      }
+      let scoresheetOv: unknown = null
+      try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
+      return { homeStarters, oppStarters, homeSubs, oppSubs, ...(scoresheetOv ? { scoresheetOv } : {}) }
+    })()
     await supabase.from('games').update({
       is_finished: true,
       quarter: currentQuarter,
       ...(scoreEvents.length > 0 ? { score_events_json: scoreEvents } : {}),
       ...(oppPlayersData.length > 0 ? { opponent_players: oppPlayersData } : {}),
+      court_data_json: courtDataFinal,
     }).eq('id', id)
 
     // score_events テーブルにも個別行として保存（opp_player_name 含む）
