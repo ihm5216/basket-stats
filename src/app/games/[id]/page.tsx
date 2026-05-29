@@ -2149,7 +2149,8 @@ export default function GamePage() {
       const gid = ++gidRef.current
       setScoreEvents(prev => {
         const last = prev[prev.length - 1]
-        const ourCurrent = gameRef.current?.our_score ?? 0
+        // gameRefはrender後に更新 → 直前イベントの値を使う（stale回避）
+        const ourCurrent = last ? last.our_score_after : (gameRef.current?.our_score ?? 0)
         const oppBefore = last ? last.opponent_score_after : (gameRef.current?.opponent_score ?? 0)
         return [...prev, {
           gid, quarter: currentQuarter, team: 'opponent', points: delta,
