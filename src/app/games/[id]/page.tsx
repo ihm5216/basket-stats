@@ -28,6 +28,7 @@ type AddEventRequest = {
   points: number
   player_id?: string
 }
+type TimeoutRecord = { quarter: number; minute: number }
 
 const STAT_BUTTONS: { label: string; key: StatKey; delta: number; category: 'made' | 'missed' | 'neutral' }[] = [
   { label: '2P 成功', key: 'fg2_made', delta: 1, category: 'made' },
@@ -632,7 +633,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 }
 
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onFoulEdit }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
@@ -640,6 +641,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
+  homeTimeoutRecords?: TimeoutRecord[]
+  oppTimeoutRecords?: TimeoutRecord[]
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [addDialog, setAddDialog] = useState(false)
@@ -743,13 +746,14 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   }
 
   // チーム別プレイヤーテーブル
-  function TeamSection({ teamLabel, playerList, starters, subs, getStats, isHome }: {
+  function TeamSection({ teamLabel, playerList, starters, subs, getStats, isHome, timeoutRecs }: {
     teamLabel: string
     playerList: { id: string; number: string; name: string }[]
     starters: Map<number, Set<string>>
     subs: Map<number, Set<string>>
     getStats: (id: string) => PlayerStat | undefined
     isHome: boolean
+    timeoutRecs?: TimeoutRecord[]
   }) {
     return (
       <div style={{border:'2px solid #333', marginBottom:6}}>
@@ -762,16 +766,24 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           <span style={{fontWeight:'bold', fontSize:10}}>{teamLabel}</span>
           <div style={{display:'flex', gap:2, alignItems:'center'}}>
             <span style={{fontSize:6, color:'#666'}}>タイムアウト</span>
-            {[1,2,3,4,5].map(i => (
-              <span key={i} style={{
-                width:11, height:11, border:'1px solid #444', borderRadius:'50%',
-                display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:6
-              }}>{i}</span>
-            ))}
-            <span style={{
-              width:22, height:11, border:'1px solid #444',
-              display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:6
-            }}>OT</span>
+            {[1,2,3,4].map(q => {
+              const rec = timeoutRecs?.find(r => r.quarter === q)
+              return (
+                <span key={q} style={{
+                  width:16, height:11, border: rec ? '1.5px solid #c00' : '1px solid #aaa', borderRadius:3,
+                  display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:5,
+                  background: rec ? '#fff0f0' : 'transparent', color: rec ? '#c00' : '#888',
+                  fontWeight: rec ? 'bold' : 'normal'
+                }}>{rec ? `Q${q}:${rec.minute}` : `Q${q}`}</span>
+              )
+            })}
+            {(timeoutRecs?.some(r => r.quarter >= 5)) && (
+              <span style={{
+                width:18, height:11, border:'1.5px solid #c00', borderRadius:3,
+                display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:5,
+                background:'#fff0f0', color:'#c00', fontWeight:'bold'
+              }}>OT:{timeoutRecs?.find(r => r.quarter >= 5)?.minute}</span>
+            )}
           </div>
         </div>
 
@@ -908,6 +920,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             subs={qHomeSubs}
             getStats={id => statsMap.get(id)}
             isHome={true}
+            timeoutRecs={homeTimeoutRecords}
           />
           {/* Qスコア & チームファウル（両チーム間に1回のみ） */}
           <div style={{border:'1px solid #888', margin:'3px 0', background:'#f8f8f4'}}>
@@ -969,6 +982,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               } catch { return undefined }
             }}
             isHome={false}
+            timeoutRecs={oppTimeoutRecords}
           />
         </div>
 
@@ -1175,6 +1189,13 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
+  // court_data_json からタイムアウト記録を復元
+  const homeTimeoutRecords: TimeoutRecord[] = (() => {
+    try { const cd = game.court_data_json as { homeTimeouts?: TimeoutRecord[] }; return cd?.homeTimeouts ?? [] } catch { return [] }
+  })()
+  const oppTimeoutRecords: TimeoutRecord[] = (() => {
+    try { const cd = game.court_data_json as { oppTimeouts?: TimeoutRecord[] }; return cd?.oppTimeouts ?? [] } catch { return [] }
+  })()
   // 試合に登録された選手のうち、スタッツが存在する選手のみ表示
   const rows = players
     .filter(p => statsMap.has(p.id))
@@ -1183,13 +1204,17 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
       stat: statsMap.get(p.id)!,
     }))
 
-  // 個人スタッツの合計得点を正とする
+  // 個人スタッツの合計得点
   const totalPoints = rows.reduce((sum, { stat }) => sum + calcPoints(stat), 0)
-  const won = totalPoints > game.opponent_score
-  const lost = totalPoints < game.opponent_score
+  // scoreEventsの合計（より正確なランニングスコアの合計）
+  const eventsOurTotal = scoreEvents.filter(e => e.team === 'us').reduce((s, e) => s + e.points, 0)
+  // 両方の最大値を表示スコアとして使用（スコアシートと一致させる）
+  const displayScore = Math.max(totalPoints, eventsOurTotal, game.our_score)
+  const won = displayScore > game.opponent_score
+  const lost = displayScore < game.opponent_score
 
   function buildShareText() {
-    const result = won ? '勝利🎉' : lost ? '敗北' : '引き分け'
+    const result = displayScore > game.opponent_score ? '勝利🎉' : displayScore < game.opponent_score ? '敗北' : '引き分け'
     const qRows = [1,2,3,4].map(q => {
       const us  = scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0)
       const opp = scoreEvents.filter(e => e.quarter === q && e.team === 'opponent').reduce((s,e) => s+e.points, 0)
@@ -1198,7 +1223,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 
     const lines = [
       `🏀 vs ${game.opponent}  ${result}`,
-      `${totalPoints} - ${game.opponent_score}`,
+      `${displayScore} - ${game.opponent_score}`,
       ...(qRows.length ? ['', '【クォータースコア】', ...qRows] : []),
       '',
       '【選手スタッツ】',
@@ -1253,7 +1278,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
           <div>
             <div className="text-xs text-[var(--muted)] mb-0.5">vs {game.opponent}</div>
             <div className={`text-3xl font-bold ${won ? 'text-green-400' : lost ? 'text-red-400' : 'text-white'}`}>
-              {totalPoints} <span className="text-[var(--muted)] text-xl">-</span> {game.opponent_score}
+              {displayScore} <span className="text-[var(--muted)] text-xl">-</span> {game.opponent_score}
             </div>
           </div>
           <div className={`px-3 py-1 rounded-full text-sm font-bold ${won ? 'bg-green-500/20 text-green-400' : lost ? 'bg-red-500/20 text-red-400' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
@@ -1350,6 +1375,8 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             onDeleteEvent={onDeleteEvent}
             onAddEvent={onAddEvent}
             onFoulEdit={onFoulEdit}
+            homeTimeoutRecords={homeTimeoutRecords}
+            oppTimeoutRecords={oppTimeoutRecords}
           />
         )}
       </div>
@@ -1522,6 +1549,10 @@ export default function GamePage() {
   const [timerSeconds, setTimerSeconds] = useState(600)
   const [timerActive, setTimerActive] = useState(false)
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // タイムアウト記録（JBAスコアシート用）
+  const [homeTimeoutRecords, setHomeTimeoutRecords] = useState<TimeoutRecord[]>([])
+  const [oppTimeoutRecords, setOppTimeoutRecords] = useState<TimeoutRecord[]>([])
+  const [timeoutModal, setTimeoutModal] = useState<{ team: 'home' | 'opp' } | null>(null)
 
   // Q毎の得点（OT含む動的集計）
   const maxQuarterInEvents = useMemo(() => Math.max(4, ...scoreEvents.map(e => e.quarter), currentQuarter), [scoreEvents, currentQuarter])
@@ -1719,7 +1750,12 @@ export default function GamePage() {
           homeSubs?: Record<string, string[]>
           oppSubs?: Record<string, string[]>
           scoresheetOv?: unknown
+          homeTimeouts?: TimeoutRecord[]
+          oppTimeouts?: TimeoutRecord[]
         }
+        // タイムアウト記録の復元
+        if (cd.homeTimeouts?.length) setHomeTimeoutRecords(cd.homeTimeouts)
+        if (cd.oppTimeouts?.length) setOppTimeoutRecords(cd.oppTimeouts)
         for (let q = 1; q <= 4; q++) {
           const qs = String(q)
           if (!localStorage.getItem(`court_q${q}_${id}`) && cd.homeStarters?.[qs]?.length)
@@ -2190,7 +2226,12 @@ export default function GamePage() {
         }
         let scoresheetOv: unknown = null
         try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
-        return { homeStarters, oppStarters, homeSubs, oppSubs, ...(scoresheetOv ? { scoresheetOv } : {}) }
+        return {
+          homeStarters, oppStarters, homeSubs, oppSubs,
+          ...(scoresheetOv ? { scoresheetOv } : {}),
+          homeTimeouts: homeTimeoutRecords,
+          oppTimeouts: oppTimeoutRecords,
+        }
       })()
       await supabase.from('games')
         .update({
@@ -2232,11 +2273,9 @@ export default function GamePage() {
   async function advanceQuarter() {
     await saveStats()
     setTeamFouls(0)
-    // タイムアウトはハーフタイム（Q2→Q3）とOT開始時にリセット
-    if (currentQuarter === 2 || currentQuarter >= 4) {
-      setHomeTimeouts(0)
-      setOppTimeouts(0)
-    }
+    // タイムアウトは毎Q開始時にリセット（1Q1回ルール）
+    setHomeTimeouts(0)
+    setOppTimeouts(0)
     // タイマーをリセット
     setTimerActive(false)
     setTimerSeconds(600)
@@ -2471,25 +2510,44 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* 行4: タイムアウト（JBA: 前後半各2回・OT各1回） */}
+        {/* 行4: タイムアウト（1Q1回ルール） */}
         {(() => {
-          const toLimit = currentQuarter >= 5 ? 1 : 2  // OTは1回、前後半各2回
-          const homeOver = homeTimeouts >= toLimit
-          const oppOver = oppTimeouts >= toLimit
+          const toLimit = 1  // 1クォーター1回
+          const homeUsed = homeTimeouts >= toLimit
+          const oppUsed = oppTimeouts >= toLimit
+          // 今Qの記録
+          const homeToThisQ = homeTimeoutRecords.filter(r => r.quarter === currentQuarter)
+          const oppToThisQ = oppTimeoutRecords.filter(r => r.quarter === currentQuarter)
           return (
-            <div className="flex items-center gap-2 px-4 pb-2">
+            <div className="flex items-center gap-2 px-4 pb-2 flex-wrap">
               <span className="text-[10px] text-[var(--muted)] flex-shrink-0">タイムアウト</span>
-              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${homeOver ? 'bg-red-500/10 border border-red-500/30' : ''}`}>
-                <span className={`text-[10px] font-bold ${homeOver ? 'text-red-400' : 'text-orange-400'}`}>自</span>
+              {/* 自チーム */}
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${homeUsed ? 'bg-orange-500/10 border border-orange-500/30' : ''}`}>
+                <span className="text-[10px] font-bold text-orange-400">自</span>
                 <button onClick={() => setHomeTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
-                <span className={`w-8 text-center text-xs font-bold tabular-nums ${homeOver ? 'text-red-400' : 'text-white'}`}>{homeTimeouts}/{toLimit}</span>
-                <button onClick={() => setHomeTimeouts(t => t + 1)} className={`w-5 h-5 rounded bg-[var(--card)] border text-white text-xs flex items-center justify-center leading-none ${homeOver ? 'border-red-500/50 text-red-400' : 'border-[var(--card-border)]'}`}>+</button>
+                {homeToThisQ.length > 0
+                  ? <span className="text-[10px] text-orange-400 font-bold px-1">{homeToThisQ[0].minute}分</span>
+                  : <span className={`w-6 text-center text-xs font-bold ${homeUsed ? 'text-orange-400' : 'text-white'}`}>{homeUsed ? '使用' : '0/1'}</span>
+                }
+                <button
+                  onClick={() => { if (!homeUsed) setTimeoutModal({ team: 'home' }) }}
+                  disabled={homeUsed}
+                  className={`w-5 h-5 rounded border text-xs flex items-center justify-center leading-none ${homeUsed ? 'opacity-30 bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)] cursor-not-allowed' : 'bg-orange-500/20 border-orange-500/50 text-orange-400'}`}
+                >+</button>
               </div>
-              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${oppOver ? 'bg-red-500/10 border border-red-500/30' : ''}`}>
-                <span className={`text-[10px] font-bold ${oppOver ? 'text-red-400' : 'text-blue-400'}`}>相</span>
+              {/* 相手チーム */}
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${oppUsed ? 'bg-blue-500/10 border border-blue-500/30' : ''}`}>
+                <span className="text-[10px] font-bold text-blue-400">相</span>
                 <button onClick={() => setOppTimeouts(t => Math.max(0, t - 1))} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
-                <span className={`w-8 text-center text-xs font-bold tabular-nums ${oppOver ? 'text-red-400' : 'text-white'}`}>{oppTimeouts}/{toLimit}</span>
-                <button onClick={() => setOppTimeouts(t => t + 1)} className={`w-5 h-5 rounded bg-[var(--card)] border text-white text-xs flex items-center justify-center leading-none ${oppOver ? 'border-red-500/50 text-red-400' : 'border-[var(--card-border)]'}`}>+</button>
+                {oppToThisQ.length > 0
+                  ? <span className="text-[10px] text-blue-400 font-bold px-1">{oppToThisQ[0].minute}分</span>
+                  : <span className={`w-6 text-center text-xs font-bold ${oppUsed ? 'text-blue-400' : 'text-white'}`}>{oppUsed ? '使用' : '0/1'}</span>
+                }
+                <button
+                  onClick={() => { if (!oppUsed) setTimeoutModal({ team: 'opp' }) }}
+                  disabled={oppUsed}
+                  className={`w-5 h-5 rounded border text-xs flex items-center justify-center leading-none ${oppUsed ? 'opacity-30 bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)] cursor-not-allowed' : 'bg-blue-500/20 border-blue-500/50 text-blue-400'}`}
+                >+</button>
               </div>
             </div>
           )
@@ -2528,6 +2586,8 @@ export default function GamePage() {
             onDeleteEvent={handleDeleteScoreEvent}
             onAddEvent={handleAddScoreEvent}
             onFoulEdit={handleFoulEdit}
+            homeTimeoutRecords={homeTimeoutRecords}
+            oppTimeoutRecords={oppTimeoutRecords}
           />
         </div>
       ) : (
@@ -2695,24 +2755,34 @@ export default function GamePage() {
               <div>
                 <div className="text-[10px] text-orange-400 mb-1.5 uppercase tracking-wide">自チームベンチ</div>
                 <div className="flex flex-col gap-1.5">
-                  {homeBench.length > 0 ? homeBench.map(p => (
+                  {homeBench.length > 0 ? homeBench.map(p => {
+                    const benchFouledOut = getTotalFouls(getEffectiveStat(p.id)) >= 5
+                    return (
                     <button
                       key={p.id}
+                      disabled={benchFouledOut}
                       onClick={() => {
+                        if (benchFouledOut) return
                         setSubInPlayer(subInPlayer?.id === p.id ? null : p)
                         setSubInOppPlayer(null)
                         setSelectedPlayer(null)
                         setSelectedOppPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2 rounded-lg border text-left transition-all active:scale-95 ${
-                        subInPlayer?.id === p.id ? 'bg-orange-500/20 border-orange-500' : 'bg-[var(--card)] border-[var(--card-border)]'
+                        benchFouledOut ? 'opacity-30 cursor-not-allowed bg-red-500/10 border-red-500/20'
+                        : subInPlayer?.id === p.id ? 'bg-orange-500/20 border-orange-500'
+                        : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className="text-[10px] text-orange-300 font-bold flex-shrink-0 w-8">#{p.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${benchFouledOut ? 'text-red-400' : 'text-orange-300'}`}>#{p.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1">{p.name}</span>
-                      {subInPlayer?.id === p.id && <span className="ml-auto text-[9px] text-orange-400 flex-shrink-0">IN</span>}
+                      {benchFouledOut
+                        ? <span className="ml-auto text-[9px] text-red-400 flex-shrink-0">退場</span>
+                        : subInPlayer?.id === p.id && <span className="ml-auto text-[9px] text-orange-400 flex-shrink-0">IN</span>
+                      }
                     </button>
-                  )) : <p className="text-[10px] text-[var(--muted)] py-1">なし</p>}
+                    )
+                  }) : <p className="text-[10px] text-[var(--muted)] py-1">なし</p>}
                 </div>
               </div>
               <div>
@@ -2810,6 +2880,40 @@ export default function GamePage() {
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="col-span-2 bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカルファウル (T)</button>
             </div>
             <button onClick={() => setFoulOppDialog({ isOpen: false })} className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all">キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* タイムアウト時間選択モーダル */}
+      {timeoutModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 pb-safe" onClick={() => setTimeoutModal(null)}>
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-t-2xl p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-base font-bold text-white mb-1 text-center">
+              {timeoutModal.team === 'home' ? '🟠 自チーム' : '🔵 相手チーム'} タイムアウト
+            </h2>
+            <p className="text-xs text-[var(--muted)] text-center mb-4">残り何分で取りましたか？</p>
+            <div className="grid grid-cols-6 gap-2 mb-4">
+              {Array.from({length: 11}, (_, i) => i).map(m => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    const rec: TimeoutRecord = { quarter: currentQuarter, minute: m }
+                    if (timeoutModal.team === 'home') {
+                      setHomeTimeoutRecords(prev => [...prev.filter(r => r.quarter !== currentQuarter), rec])
+                      setHomeTimeouts(1)
+                    } else {
+                      setOppTimeoutRecords(prev => [...prev.filter(r => r.quarter !== currentQuarter), rec])
+                      setOppTimeouts(1)
+                    }
+                    setTimeoutModal(null)
+                  }}
+                  className="py-2.5 rounded-xl bg-[var(--card)] border border-[var(--card-border)] text-white text-sm font-bold hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95"
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setTimeoutModal(null)} className="w-full py-2.5 rounded-xl bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted)] text-sm">キャンセル</button>
           </div>
         </div>
       )}
