@@ -15,8 +15,11 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-tap-highlight-color: transparent;
+  /* iPhoneのバウンススクロールを防止 */
+  overscroll-behavior: none;
 }
 
+/* ─── ボタン共通 ─── */
 .btn-primary {
   background-color: var(--primary);
   color: white;
@@ -32,9 +35,8 @@ body {
   gap: 0.5rem;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
 }
-
-.btn-primary { white-space: nowrap; }
 .btn-primary:hover { background-color: var(--primary-dark); }
 .btn-primary:active { transform: scale(0.97); }
 
@@ -53,11 +55,12 @@ body {
   gap: 0.5rem;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
 }
-
-.btn-secondary { white-space: nowrap; }
 .btn-secondary:hover { background-color: #1a3a56; }
+.btn-secondary:active { transform: scale(0.97); }
 
+/* ─── カード ─── */
 .card {
   background-color: var(--card);
   border: 1px solid var(--card-border);
@@ -65,6 +68,12 @@ body {
   padding: 1.5rem;
 }
 
+/* モバイルではカードのpaddingを少し詰める */
+@media (max-width: 390px) {
+  .card { padding: 1rem; }
+}
+
+/* ─── フォームフィールド ─── */
 .input-field {
   background-color: #0d2235;
   border: 1px solid #1a3a56;
@@ -72,13 +81,13 @@ body {
   color: var(--foreground);
   padding: 0.75rem 1rem;
   width: 100%;
-  font-size: 1rem;
+  font-size: 1rem;  /* 16px以上でiOSのズーム防止 */
   outline: none;
   transition: border-color 0.15s;
 }
-
 .input-field:focus { border-color: var(--primary); }
 
+/* ─── スタッツ記録ボタン（モバイル最適化）─── */
 .stat-btn {
   background-color: #0d2235;
   border: 1px solid #1a3a56;
@@ -90,7 +99,7 @@ body {
   cursor: pointer;
   transition: all 0.1s;
   text-align: center;
-  min-height: 64px;
+  min-height: 68px;  /* タップしやすい最小サイズ */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -98,9 +107,38 @@ body {
   gap: 0.25rem;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.stat-btn:active { transform: scale(0.93); background-color: #1a3a56; }
-.stat-btn.made { border-color: #10b981; }
-.stat-btn.missed { border-color: #ef4444; }
-.stat-btn.neutral { border-color: #6b7280; }
+.stat-btn:active {
+  transform: scale(0.92);
+  background-color: #1a3a56;
+  transition: transform 0.05s;
+}
+.stat-btn.made   { border-color: #10b981; background-color: rgba(16,185,129,0.08); }
+.stat-btn.missed { border-color: #ef4444; background-color: rgba(239,68,68,0.08); }
+.stat-btn.neutral{ border-color: #6b7280; }
+
+/* ─── iPhoneのsafe-area対応ユーティリティ ─── */
+.safe-area-top    { padding-top: env(safe-area-inset-top); }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+
+/* ─── スクロールバーを非表示（モバイルで余白が出ないように）─── */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── モーダルのスライドアップアニメーション ─── */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.modal-slideup { animation: slideUp 0.25s ease-out; }
+
+/* ─── 印刷スタイル ─── */
+@media print {
+  body { background: white !important; color: black !important; }
+  .print\\:hidden { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

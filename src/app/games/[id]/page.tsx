@@ -2403,18 +2403,20 @@ export default function GamePage() {
     <div className="min-h-screen flex flex-col">
       {/* ─── ヘッダー ─── */}
       <div className="sticky top-0 bg-[var(--background)] z-10 border-b border-[var(--card-border)]">
-        {/* 行1: 戻る / スコア / 保存 */}
-        <div className="flex items-center justify-between px-4 pt-2 pb-1">
-          <Link href={`/teams/${game.team_id}`} className="text-[var(--muted)] text-sm">← 戻る</Link>
-          <div className="text-center">
-            <div className="text-xs text-[var(--muted)]">vs {game.opponent}</div>
-            <div className="font-bold text-white text-xl leading-tight">{game.our_score} - {game.opponent_score}</div>
+        {/* 行1: 戻る / スコア / 保存 — セーフエリア対応 */}
+        <div className="flex items-center justify-between px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-1">
+          <Link href={`/teams/${game.team_id}`} className="text-[var(--muted)] text-xs min-w-[3rem]">← 戻る</Link>
+          <div className="text-center flex-1 mx-2">
+            <div className="text-[10px] text-[var(--muted)] truncate">vs {game.opponent}</div>
+            <div className="font-bold text-white text-2xl leading-tight tabular-nums">{game.our_score} <span className="text-base text-[var(--muted)]">-</span> {game.opponent_score}</div>
           </div>
           {pending.length > 0 ? (
-            <button onClick={saveStats} disabled={saving} className="btn-primary text-xs py-1.5 px-3">
-              {saving ? '保存中' : `保存 (${pending.length})`}
+            <button onClick={saveStats} disabled={saving}
+              className="text-[11px] font-bold text-white rounded-xl py-2 px-3 flex-shrink-0"
+              style={{ background: saving ? '#555' : '#0ea5e9' }}>
+              {saving ? '保存中…' : `保存(${pending.length})`}
             </button>
-          ) : <div className="w-16" />}
+          ) : <div className="min-w-[3rem]" />}
         </div>
 
         {/* 行2: クォータータブ + タイマー + メンバー変更 */}
@@ -2906,7 +2908,7 @@ export default function GamePage() {
       {/* タイムアウト時間選択モーダル */}
       {timeoutModal && (
         <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 pb-safe" onClick={() => setTimeoutModal(null)}>
-          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-t-2xl p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-t-2xl p-5 w-full max-w-sm shadow-2xl modal-slideup" style={{paddingBottom:'max(1.25rem,env(safe-area-inset-bottom))'}} onClick={e => e.stopPropagation()}>
             <h2 className="text-base font-bold text-white mb-1 text-center">
               {timeoutModal.team === 'home' ? '🟠 自チーム' : '🔵 相手チーム'} タイムアウト
             </h2>
