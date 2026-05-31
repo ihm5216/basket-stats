@@ -1551,6 +1551,8 @@ export default function GamePage() {
   const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, OppFoulData>>({})
   // 5ファウルアウト通知
   const [foulOutAlert, setFoulOutAlert] = useState<{ playerName: string; playerNumber: string } | null>(null)
+  // ペイウォール（5試合無料制限）
+  const [showPaywall, setShowPaywall] = useState(false)
   // ゲームクロック（10分 = 600秒）
   const [timerSeconds, setTimerSeconds] = useState(600)
   const [timerActive, setTimerActive] = useState(false)
@@ -2315,8 +2317,34 @@ export default function GamePage() {
 
   async function finishGame() {
     if (!confirm('試合を終了しますか？')) return
-    await saveStats()
+
+    // ── 5試合無料制限チェック ──────────────────────────────────
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      // サブスクリプション確認
+      const { data: sub } = await supabase
+        .from('subscriptions').select('status').eq('user_id', user.id).maybeSingle()
+      const hasSubscription = sub?.status === 'active' || sub?.status === 'trialing'
+
+      if (!hasSubscription) {
+        // このユーザーの終了済み試合数を確認
+        const { data: teams } = await supabase.from('teams').select('id').eq('user_id', user.id)
+        const teamIds = teams?.map(t => t.id) ?? []
+        if (teamIds.length > 0) {
+          const { count } = await supabase.from('games')
+            .select('id', { count: 'exact', head: true })
+            .in('team_id', teamIds).eq('is_finished', true)
+          if ((count ?? 0) >= 5) {
+            setShowPaywall(true)
+            return  // ← 試合終了をブロックしてペイウォールを表示
+          }
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────
+
+    await saveStats()
 
     // 相手選手・スコアイベント・コートデータを games テーブルに永続化（クロスデバイス対応）
     const oppPlayersData = oppPlayerList.map(p => ({ number: p.number, name: p.name }))
@@ -2901,6 +2929,38 @@ export default function GamePage() {
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="col-span-2 bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカルファウル (T)</button>
             </div>
             <button onClick={() => setFoulOppDialog({ isOpen: false })} className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all">キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* ペイウォール — 5試合無料制限 */}
+      {showPaywall && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-5">
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
+            <div className="text-4xl mb-3">🏀</div>
+            <h2 className="text-xl font-bold text-white mb-2">5試合の無料体験終了</h2>
+            <p className="text-sm leading-relaxed mb-1" style={{ color: 'var(--muted)' }}>
+              無料体験の5試合を使い切りました。<br />
+              続けるには月額プランへの登録が必要です。
+            </p>
+            <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>
+              ※ 記録中のデータは消えません
+            </p>
+
+            <div className="bg-[var(--background)] rounded-xl p-3 mb-5">
+              <div className="text-2xl font-bold text-white">¥500<span className="text-sm font-normal" style={{ color: 'var(--muted)' }}>/月</span></div>
+              <div className="text-xs" style={{ color: 'var(--muted)' }}>チーム全員・無制限・いつでも解約OK</div>
+            </div>
+
+            <a href="/upgrade"
+              className="block w-full font-bold text-white rounded-2xl py-4 text-base mb-3 active:scale-95 transition-transform"
+              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
+              登録する →
+            </a>
+            <button onClick={() => setShowPaywall(false)}
+              className="text-sm underline" style={{ color: 'var(--muted)' }}>
+              あとで登録する（試合を終了しない）
+            </button>
           </div>
         </div>
       )}
