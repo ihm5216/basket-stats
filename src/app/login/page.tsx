@@ -18,12 +18,22 @@ export default function LoginPage() {
   // ── OAuth共通 ────────────────────────────────
   async function handleOAuth(provider: 'google' | 'apple') {
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/dashboard` },
-    })
-    if (error) { setError(`${provider === 'google' ? 'Google' : 'Apple'}ログインに失敗しました`); setLoading(false) }
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/dashboard` },
+      })
+      if (error) {
+        setError(`${provider === 'google' ? 'Google' : 'Apple'}ログインに失敗しました: ${error.message}`)
+        setLoading(false)
+      }
+      // リダイレクトが起きない場合のフォールバック
+      setTimeout(() => setLoading(false), 5000)
+    } catch (e) {
+      setError('ログインに失敗しました。再度お試しください。')
+      setLoading(false)
+    }
   }
 
   // ── Magic Link ───────────────────────────────
