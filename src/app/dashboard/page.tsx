@@ -32,6 +32,7 @@ function DashboardContent() {
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
+    try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
@@ -68,6 +69,10 @@ function DashboardContent() {
     })
 
     setLoading(false)
+    } catch (e) {
+      console.error('Dashboard load error:', e)
+      setLoading(false)
+    }
   }
 
   async function handleLogout() {
