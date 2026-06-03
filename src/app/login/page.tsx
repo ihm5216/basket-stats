@@ -20,20 +20,23 @@ export default function LoginPage() {
     setLoading(true); setError('')
     try {
       const supabase = createClient()
+      // skipBrowserRedirect: true でURLを取得し、自分でリダイレクト（iOS Safari対策）
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
+        },
       })
       if (error) {
         setError(`エラー: ${error.message}`)
         setLoading(false)
         return
       }
-      // dataにURLがある場合は手動でリダイレクト
       if (data?.url) {
-        window.location.href = data.url
+        window.location.replace(data.url)
       } else {
-        setError('リダイレクトURLが取得できませんでした。Supabaseの設定を確認してください。')
+        setError('認証URLが取得できませんでした。')
         setLoading(false)
       }
     } catch (e: any) {
