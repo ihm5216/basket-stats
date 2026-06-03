@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useEffect } from 'react'
 
 type Mode = 'top' | 'magic' | 'password' | 'sent'
 
@@ -15,35 +16,12 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // ── OAuth共通 ────────────────────────────────
-  async function handleOAuth(provider: 'google' | 'apple') {
-    setLoading(true); setError('')
-    try {
-      const supabase = createClient()
-      // skipBrowserRedirect: true でURLを取得し、自分でリダイレクト（iOS Safari対策）
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: true,
-        },
-      })
-      if (error) {
-        setError(`エラー: ${error.message}`)
-        setLoading(false)
-        return
-      }
-      if (data?.url) {
-        window.location.replace(data.url)
-      } else {
-        setError('認証URLが取得できませんでした。')
-        setLoading(false)
-      }
-    } catch (e: any) {
-      setError(`例外エラー: ${e?.message ?? String(e)}`)
-      setLoading(false)
-    }
-  }
+  // URLパラメータのエラーを表示
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('error')
+    if (err) setError(`ログインエラー: ${err}`)
+  }, [])
 
   // ── Magic Link ───────────────────────────────
   async function handleMagicLink(e: React.FormEvent) {
@@ -121,8 +99,8 @@ export default function LoginPage() {
             </div>
 
             {/* Google */}
-            <button onClick={() => handleOAuth('google')} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform border"
+            <a href="/api/auth/google"
+              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform border no-underline"
               style={{ background: 'white', color: '#222', borderColor: '#ddd' }}>
               <svg width="20" height="20" viewBox="0 0 48 48" className="ml-3 flex-shrink-0">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -132,18 +110,18 @@ export default function LoginPage() {
               </svg>
               <span className="flex-1 text-left">Googleでログイン</span>
               <span className="text-[10px] mr-3 font-normal" style={{ color: '#888' }}>YouTube / Gmail</span>
-            </button>
+            </a>
 
             {/* Apple */}
-            <button onClick={() => handleOAuth('apple')} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
+            <a href="/api/auth/apple"
+              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform no-underline"
               style={{ background: '#111', color: 'white', border: '1px solid #333' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="white" className="ml-3 flex-shrink-0">
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
               </svg>
               <span className="flex-1 text-left">Appleでログイン</span>
               <span className="text-[10px] mr-3 font-normal" style={{ color: '#888' }}>Face ID 対応</span>
-            </button>
+            </a>
 
             {/* 区切り */}
             <div className="flex items-center gap-3 my-1">
