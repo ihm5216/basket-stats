@@ -20,18 +20,24 @@ export default function LoginPage() {
     setLoading(true); setError('')
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/dashboard` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
       if (error) {
-        setError(`${provider === 'google' ? 'Google' : 'Apple'}ログインに失敗しました: ${error.message}`)
+        setError(`エラー: ${error.message}`)
+        setLoading(false)
+        return
+      }
+      // dataにURLがある場合は手動でリダイレクト
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        setError('リダイレクトURLが取得できませんでした。Supabaseの設定を確認してください。')
         setLoading(false)
       }
-      // リダイレクトが起きない場合のフォールバック
-      setTimeout(() => setLoading(false), 5000)
-    } catch (e) {
-      setError('ログインに失敗しました。再度お試しください。')
+    } catch (e: any) {
+      setError(`例外エラー: ${e?.message ?? String(e)}`)
       setLoading(false)
     }
   }
