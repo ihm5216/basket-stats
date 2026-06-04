@@ -37,6 +37,8 @@ export async function updateSession(request: NextRequest) {
 
   const publicPaths = ['/', '/login', '/signup', '/share']
   const isPublicPath = publicPaths.some(p => pathname === p || pathname.startsWith('/share/'))
+    || pathname.startsWith('/api/auth/')
+    || pathname.startsWith('/auth/')
 
   if (!user && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', request.url))
