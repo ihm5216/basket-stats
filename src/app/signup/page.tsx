@@ -20,7 +20,7 @@ export default function SignupPage() {
       const supabase = createClient()
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/dashboard` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
       if (error) {
         setError(`${provider === 'google' ? 'Google' : 'Apple'}登録に失敗しました: ${error.message}`)
@@ -43,7 +43,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         shouldCreateUser: true,
         data: { team_name: teamName.trim() },
       },

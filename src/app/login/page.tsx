@@ -51,7 +51,7 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/dashboard`, shouldCreateUser: false },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback`, shouldCreateUser: false },
     })
     if (error) { setError('メール送信に失敗しました。登録済みのメアドかご確認ください。'); setLoading(false) }
     else { setMode('sent'); setLoading(false) }
