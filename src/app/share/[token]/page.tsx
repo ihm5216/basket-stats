@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { aggregateSeasonStats } from '@/lib/stats'
 import { notFound } from 'next/navigation'
 import { format } from 'date-fns'
@@ -6,7 +6,11 @@ import { ja } from 'date-fns/locale'
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const supabase = await createClient()
+  // シェアページはRLSをバイパスするためサービスロールキーを使用
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
   const { data: team } = await supabase
     .from('teams')
