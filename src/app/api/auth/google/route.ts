@@ -1,37 +1,12 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin
-  const cookieStore = await cookies()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const redirectTo = `${origin}/auth/callback`
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  // SupabaseのOAuth URLを直接構築（最もシンプルで確実な方法）
+  const oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${origin}/auth/callback`,
-      skipBrowserRedirect: true,
-    },
-  })
-
-  if (error || !data?.url) {
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error?.message ?? 'unknown')}`, origin))
-  }
-
-  return NextResponse.redirect(data.url)
+  return NextResponse.redirect(oauthUrl)
 }
