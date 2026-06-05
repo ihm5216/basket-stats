@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const token_hash = requestUrl.searchParams.get('token_hash')
-  const type = requestUrl.searchParams.get('type') as 'email' | 'recovery' | null
+  const type = requestUrl.searchParams.get('type') as 'email' | 'recovery' | 'signup' | 'magiclink' | null
   const next = requestUrl.searchParams.get('next') ?? '/dashboard'
 
   const cookieStore = await cookies()
@@ -31,16 +31,21 @@ export async function GET(request: NextRequest) {
     if (!error) {
       return NextResponse.redirect(new URL(next, requestUrl.origin))
     }
+    console.error('exchangeCodeForSession error:', error.message)
   }
 
-  // マジックリンク（メール認証）のトークン検証
+  // メール認証・マジックリンクのトークン検証（signup/email/magiclink対応）
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
     if (!error) {
       return NextResponse.redirect(new URL(next, requestUrl.origin))
     }
+    console.error('verifyOtp error:', error.message, 'type:', type)
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin))
   }
 
-  // エラー時はloginページへ
-  return NextResponse.redirect(new URL('/login?error=auth_failed', requestUrl.origin))
+  // パラメータなし or 全て失敗
+  const params = requestUrl.searchParams.toString()
+  console.error('auth callback failed, params:', params)
+  return NextResponse.redirect(new URL(`/login?error=auth_failed&detail=${encodeURIComponent(params)}`, requestUrl.origin))
 }
