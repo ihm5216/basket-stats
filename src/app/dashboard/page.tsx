@@ -32,17 +32,27 @@ function DashboardContent() {
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
+    // 10秒でタイムアウト
+    const timeout = setTimeout(() => {
+      setLoading(false)
+    }, 10000)
+
     try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    if (!user) { clearTimeout(timeout); router.push('/login'); return }
     setUserEmail(user.email ?? '')
 
-    const [{ data: teamsData }, { data: gamesData }, { data: subData }] = await Promise.all([
+    // まずチームを取得、その後ゲームを取得（RLS対応）
+    const [{ data: teamsData }, { data: subData }] = await Promise.all([
       supabase.from('teams').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('games').select('*, team:teams(*)').order('game_date', { ascending: false }).limit(5),
       supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
     ])
+
+    const teamIds = (teamsData ?? []).map((t: Team) => t.id)
+    const { data: gamesData } = teamIds.length > 0
+      ? await supabase.from('games').select('*, team:teams(*)').in('team_id', teamIds).order('game_date', { ascending: false }).limit(5)
+      : { data: [] }
 
     const myTeams = teamsData ?? []
     setTeams(myTeams)
@@ -68,9 +78,11 @@ function DashboardContent() {
       canPlay: finishedCount < FREE_GAMES_LIMIT || hasSubscription,
     })
 
+    clearTimeout(timeout)
     setLoading(false)
     } catch (e) {
       console.error('Dashboard load error:', e)
+      clearTimeout(timeout)
       setLoading(false)
     }
   }
