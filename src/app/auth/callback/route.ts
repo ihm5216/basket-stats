@@ -25,16 +25,13 @@ export async function GET(request: NextRequest) {
     }
   )
 
-  // OAuth（Google/Apple）のコード交換
+  // OAuth（Google/Apple）: PKCEはクライアントサイドで処理するためcodeをそのまま渡す
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin))
-    }
-    console.error('exchangeCodeForSession error:', error.message)
+    // PKCEのコード検証器はブラウザのcookieにある→クライアントページで処理
+    return NextResponse.redirect(new URL(`/auth/confirm?code=${code}&next=${encodeURIComponent(next)}`, requestUrl.origin))
   }
 
-  // メール認証・マジックリンクのトークン検証（signup/email/magiclink対応）
+  // メール認証・マジックリンク（token_hash方式）
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
     if (!error) {
@@ -44,8 +41,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin))
   }
 
-  // パラメータなし or 全て失敗
   const params = requestUrl.searchParams.toString()
-  console.error('auth callback failed, params:', params)
   return NextResponse.redirect(new URL(`/login?error=auth_failed&detail=${encodeURIComponent(params)}`, requestUrl.origin))
 }
