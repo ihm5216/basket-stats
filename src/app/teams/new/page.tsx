@@ -18,7 +18,12 @@ export default function NewTeamPage() {
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    if (!user) {
+      // セッション判定ズレによるリダイレクトループ防止（ハードリダイレクト）
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+      window.location.href = '/login'
+      return
+    }
 
     const shareToken = crypto.randomUUID()
     const { data, error } = await supabase

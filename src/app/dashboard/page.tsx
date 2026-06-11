@@ -40,7 +40,14 @@ function DashboardContent() {
     try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { clearTimeout(timeout); router.push('/login'); return }
+    if (!user) {
+      clearTimeout(timeout)
+      // クライアントとmiddlewareのセッション判定がズレると /login ⇄ /dashboard の
+      // 無限ループになるため、残留Cookieを破棄してからハードリダイレクトで脱出する
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+      window.location.href = '/login'
+      return
+    }
     setUserEmail(user.email ?? '')
 
     // まずチームを取得、その後ゲームを取得（RLS対応）
@@ -90,8 +97,16 @@ function DashboardContent() {
 
   async function handleLogout() {
     const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/')
+    // サーバー側の失効が固まっても3秒で打ち切り、ローカルのCookieは確実に消す
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ])
+    } catch { /* ignore */ }
+    try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+    // SPA遷移ではなく全画面リロードでmiddlewareの判定もリセットする
+    window.location.href = '/'
   }
 
   if (loading) return <LoadingScreen />

@@ -144,7 +144,12 @@ function NewGameForm() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (!user) {
+        // セッション判定ズレによるリダイレクトループ防止（ハードリダイレクト）
+        try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+        window.location.href = '/login'
+        return
+      }
       const { data } = await supabase.from('teams').select('*').eq('user_id', user.id)
       setTeams(data ?? [])
     }
