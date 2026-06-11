@@ -70,7 +70,8 @@ function DashboardContent() {
       finishedCount = count ?? 0
     }
 
-    const hasSubscription = subData?.status === 'active' || subData?.status === 'trialing'
+    // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
+    const hasSubscription = subData?.status === 'active'
     setTrial({
       finishedGames: finishedCount,
       remaining: Math.max(0, FREE_GAMES_LIMIT - finishedCount),

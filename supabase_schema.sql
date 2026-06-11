@@ -123,10 +123,6 @@ BEGIN
     VALUES (NEW.id, NEW.raw_user_meta_data->>'team_name');
   END IF;
 
-  -- 無料トライアルのサブスクリプションを作成
-  INSERT INTO subscriptions (user_id, status, current_period_end)
-  VALUES (NEW.id, 'trialing', NOW() + INTERVAL '14 days');
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

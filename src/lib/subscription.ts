@@ -41,7 +41,9 @@ export async function getTrialStatus(userId: string): Promise<TrialStatus> {
     .eq('user_id', userId)
     .maybeSingle()
 
-  const hasSubscription = sub?.status === 'active' || sub?.status === 'trialing'
+  // 'trialing' は登録時トリガーが全員に付与する初期値のため有料扱いにしない
+  // （無料枠は「5試合」でカウント管理する。有料は Stripe 決済済みの 'active' のみ）
+  const hasSubscription = sub?.status === 'active'
   const isTrialActive = finishedGames < FREE_GAMES_LIMIT
   const canPlayGame = isTrialActive || hasSubscription
 

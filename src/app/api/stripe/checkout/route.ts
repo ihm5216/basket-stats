@@ -10,6 +10,9 @@ export async function POST(req: Request) {
     if (!stripeKey || stripeKey === 'your_stripe_secret_key') {
       return NextResponse.json({ error: 'Stripe未設定です。.env.localを確認してください。' }, { status: 400 })
     }
+    if (!priceId || !priceId.startsWith('price_')) {
+      return NextResponse.json({ error: 'STRIPE_PRICE_ID が未設定です。Stripeで月額500円の価格を作成し、price_xxx を環境変数に設定してください。' }, { status: 400 })
+    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

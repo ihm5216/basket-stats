@@ -2338,7 +2338,8 @@ export default function GamePage() {
       // サブスクリプション確認
       const { data: sub } = await supabase
         .from('subscriptions').select('status').eq('user_id', user.id).maybeSingle()
-      const hasSubscription = sub?.status === 'active' || sub?.status === 'trialing'
+      // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
+      const hasSubscription = sub?.status === 'active'
 
       if (!hasSubscription) {
         // このユーザーの終了済み試合数を確認
