@@ -54,8 +54,8 @@ const sections: { title: string; body: string[] }[] = [
   {
     title: '8. お問い合わせ窓口',
     body: [
-      '事業者：【公開前に記入：事業者氏名（奥さまのフルネーム）】',
-      'メールアドレス：【公開前に記入：サポート用メールアドレス】',
+      // TODO: 有料プラン開始前に事業者氏名（妻名義）とサポート用メールを記入すること
+      '事業者・メールアドレス：準備中（有料プラン提供開始までに記載します）',
     ],
   },
   {
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
       <div className="max-w-2xl mx-auto">
         <Link href="/" className="text-xs" style={{ color: 'var(--muted)' }}>← トップに戻る</Link>
         <h1 className="text-xl font-bold text-white mt-4 mb-2">プライバシーポリシー</h1>
-        <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>制定日：【公開前に記入：公開日】</p>
+        <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>制定日：2026年6月11日</p>
         <div className="flex flex-col gap-5">
           {sections.map(s => (
             <section key={s.title}>

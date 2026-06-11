@@ -82,7 +82,7 @@ export default function TermsPage() {
       <div className="max-w-2xl mx-auto">
         <Link href="/" className="text-xs" style={{ color: 'var(--muted)' }}>← トップに戻る</Link>
         <h1 className="text-xl font-bold text-white mt-4 mb-2">利用規約</h1>
-        <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>制定日：【公開前に記入：公開日】</p>
+        <p className="text-xs mb-6" style={{ color: 'var(--muted)' }}>制定日：2026年6月11日</p>
         <div className="flex flex-col gap-5">
           {sections.map(s => (
             <section key={s.title}>
