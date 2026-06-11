@@ -634,18 +634,20 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 }
 
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
   oppFoulsMap?: Record<string, OppFoulData>
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
+  onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
   homeTimeoutRecords?: TimeoutRecord[]
   oppTimeoutRecords?: TimeoutRecord[]
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
+  const [changeSel, setChangeSel] = useState('')  // 選手変更ダイアログの選択値
   const [addDialog, setAddDialog] = useState(false)
   const [addTeam, setAddTeam] = useState<'us'|'opponent'>('us')
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
@@ -1001,7 +1003,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             </div>
             {onAddEvent && (
               <button
-                onClick={() => { setAddDialog(true); setAddTeam('us'); setAddPlayerIdx(0); setAddPoints(2); setAddQuarter(1) }}
+                onClick={() => {
+                  // 直近の記録があるQ（なければ現在のQ）を初期選択にする
+                  const lastQ = scoreEvents.length ? scoreEvents[scoreEvents.length - 1].quarter : (game.quarter ?? 1)
+                  setAddDialog(true); setAddTeam('us'); setAddPlayerIdx(0); setAddPoints(2); setAddQuarter(Math.min(Math.max(lastQ, 1), 4))
+                }}
                 style={{fontSize:9, padding:'1px 5px', background:'#1a5a2e', color:'#6ee7a0', border:'1px solid #2d8a50', borderRadius:3, cursor:'pointer', lineHeight:1.4}}
               >＋ 手動追加</button>
             )}
@@ -1037,14 +1043,14 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                       const bIdx = bEventIdxMap.get(n)
                       return [
                         <td key={`a${n}`}
-                          onClick={aM && onDeleteEvent && aIdx !== undefined ? () => setDeleteConfirm({idx: aIdx, ev: scoreEvents[aIdx], num: aM.num, type: aM.type}) : undefined}
+                          onClick={aM && onDeleteEvent && aIdx !== undefined ? () => { setChangeSel(''); setDeleteConfirm({idx: aIdx, ev: scoreEvents[aIdx], num: aM.num, type: aM.type}) } : undefined}
                           style={{border:B, borderBottom:bbA, width:30, height:13, position:'relative', textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:aColor, cursor: aM && onDeleteEvent ? 'pointer' : 'default', background: aM && onDeleteEvent ? 'rgba(220,38,38,0.04)' : undefined}}
                         >
                           <span style={{position:'absolute', top:0, left:1, fontSize:5, color:'#bbb', lineHeight:'1', userSelect:'none'}}>{n}</span>
                           {markContent(aM)}
                         </td>,
                         <td key={`b${n}`}
-                          onClick={bM && onDeleteEvent && bIdx !== undefined ? () => setDeleteConfirm({idx: bIdx, ev: scoreEvents[bIdx], num: bM.num, type: bM.type}) : undefined}
+                          onClick={bM && onDeleteEvent && bIdx !== undefined ? () => { setChangeSel(''); setDeleteConfirm({idx: bIdx, ev: scoreEvents[bIdx], num: bM.num, type: bM.type}) } : undefined}
                           style={{border:B, borderBottom:bbB, borderRight:gi<2?'2px solid #888':B, width:30, height:13, textAlign:'center', verticalAlign:'middle', fontSize:8, lineHeight:'13px', color:bColor, cursor: bM && onDeleteEvent ? 'pointer' : 'default', background: bM && onDeleteEvent ? 'rgba(220,38,38,0.04)' : undefined}}
                         >
                           {markContent(bM)}
@@ -1059,26 +1065,60 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
         </div>
       </div>
 
-      {/* 削除確認ダイアログ */}
-      {deleteConfirm && (
+      {/* スコア修正ダイアログ（選手の変更・削除） */}
+      {deleteConfirm && (() => {
+        const isUs = deleteConfirm.ev.team === 'us'
+        // 選手変更の候補（現在の得点者は除外）
+        const currentId = isUs
+          ? deleteConfirm.ev.player_id
+          : oppPlayerList.find(p => deleteConfirm.ev.opp_player_name === `#${p.number} ${p.name}`)?.key
+        const candidates = (isUs
+          ? players.map(p => ({ id: p.id, label: `#${p.number || '—'} ${p.name}` }))
+          : oppPlayerList.map(p => ({ id: p.key, label: `#${p.number} ${p.name}` }))
+        ).filter(c => c.id !== currentId)
+        return (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200}} onClick={() => setDeleteConfirm(null)}>
-          <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:300, width:'90%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
-            <div style={{fontWeight:'bold', fontSize:14, marginBottom:8}}>このスコアを削除しますか？</div>
+          <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:320, width:'92%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontWeight:'bold', fontSize:14, marginBottom:8}}>この記録を修正</div>
             <div style={{fontSize:12, color:'#555', marginBottom:4}}>
-              Q{deleteConfirm.ev.quarter}　{deleteConfirm.ev.team === 'us' ? 'チームA' : 'チームB'}
+              Q{deleteConfirm.ev.quarter}　{isUs ? 'チームA' : 'チームB'}
               {deleteConfirm.num ? `　#${deleteConfirm.num}` : ''}
             </div>
-            <div style={{fontSize:16, fontWeight:'bold', marginBottom:16, color: deleteConfirm.ev.team === 'us' ? '#c00' : '#00c'}}>
+            <div style={{fontSize:16, fontWeight:'bold', marginBottom:12, color: isUs ? '#c00' : '#00c'}}>
               {deleteConfirm.type}（{deleteConfirm.ev.points}点）
             </div>
-            <div style={{fontSize:10, color:'#888', marginBottom:16}}>スタッツも同時に取り消されます</div>
+
+            {/* 選手の付け替え */}
+            {onChangeEventPlayer && candidates.length > 0 && (
+              <div style={{border:'1px solid #ddd', borderRadius:8, padding:10, marginBottom:12, textAlign:'left'}}>
+                <div style={{fontSize:11, fontWeight:'bold', color:'#555', marginBottom:6}}>
+                  得点した選手が違う場合（スタッツも付け替えます）
+                </div>
+                <select
+                  value={changeSel}
+                  onChange={e => setChangeSel(e.target.value)}
+                  style={{width:'100%', padding:'8px', borderRadius:6, border:'1px solid #ccc', fontSize:14, marginBottom:8, background:'#fff'}}
+                >
+                  <option value="">正しい選手を選択...</option>
+                  {candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+                <button
+                  disabled={!changeSel}
+                  onClick={() => { onChangeEventPlayer(deleteConfirm.idx, deleteConfirm.ev, changeSel); setDeleteConfirm(null) }}
+                  style={{width:'100%', padding:'9px', border:'none', borderRadius:6, background: changeSel ? '#0ea5e9' : '#cbd5e1', color:'white', fontWeight:'bold', cursor: changeSel ? 'pointer' : 'default', fontSize:13}}
+                >この選手に変更する</button>
+              </div>
+            )}
+
+            <div style={{fontSize:10, color:'#888', marginBottom:10}}>削除した場合はスタッツも同時に取り消されます</div>
             <div style={{display:'flex', gap:8}}>
               <button onClick={() => setDeleteConfirm(null)} style={{flex:1, padding:'8px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer'}}>キャンセル</button>
               <button onClick={() => { onDeleteEvent?.(deleteConfirm.idx, deleteConfirm.ev); setDeleteConfirm(null) }} style={{flex:1, padding:'8px', border:'none', borderRadius:6, background:'#dc2626', color:'white', fontWeight:'bold', cursor:'pointer'}}>削除</button>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* 手動追加ダイアログ */}
       {addDialog && (
@@ -1185,7 +1225,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 }
 
 // ─── 試合終了後スタッツ一覧 ──────────────────────────────────────────────────
-function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onFoulEdit }: {
+function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit }: {
   game: Game
   players: Player[]
   statsMap: Map<string, PlayerStat>
@@ -1193,6 +1233,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   oppPlayerList: OppPlayer[]
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
+  onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
@@ -1381,6 +1422,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             gameId={game.id}
             onDeleteEvent={onDeleteEvent}
             onAddEvent={onAddEvent}
+            onChangeEventPlayer={onChangeEventPlayer}
             onFoulEdit={onFoulEdit}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
@@ -1972,6 +2014,33 @@ export default function GamePage() {
     }
   }
 
+  // スコアシートから「得点した選手」を付け替える（スタッツも旧選手→新選手へ移動）
+  function handleChangeEventPlayer(idx: number, ev: ScoreEvent, newId: string) {
+    if (ev.team === 'us') {
+      if (newId === ev.player_id) return
+      setScoreEvents(prev => prev.map((e, i) => i === idx ? { ...e, player_id: newId } : e))
+      const gid = ++gidRef.current
+      const key: StatKey = ev.points === 1 ? 'ft_made' : ev.points === 2 ? 'fg2_made' : 'fg3_made'
+      const attemptKey: StatKey = ev.points === 1 ? 'ft_attempt' : ev.points === 2 ? 'fg2_attempt' : 'fg3_attempt'
+      skipUndoStackRef.current = true
+      const changes: PendingChange[] = [
+        { playerId: newId, key, delta: 1, gid },
+        { playerId: newId, key: attemptKey, delta: 1, gid },
+      ]
+      if (ev.player_id) {
+        changes.push(
+          { playerId: ev.player_id, key, delta: -1, gid },
+          { playerId: ev.player_id, key: attemptKey, delta: -1, gid },
+        )
+      }
+      setPending(prev => [...prev, ...changes])
+    } else {
+      const opp = oppPlayerList.find(p => p.key === newId)
+      if (!opp) return
+      setScoreEvents(prev => prev.map((e, i) => i === idx ? { ...e, opp_player_name: `#${opp.number} ${opp.name}` } : e))
+    }
+  }
+
   function handleAddScoreEvent(req: AddEventRequest) {
     const gid = ++gidRef.current
     // scoreEventsに追加（末尾）
@@ -2419,7 +2488,7 @@ export default function GamePage() {
   if (!game) return null
 
   if (game.is_finished) {
-    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onFoulEdit={handleFoulEdit} />
+    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} />
   }
 
   if (courtSetupMode) {
@@ -2646,6 +2715,7 @@ export default function GamePage() {
             oppFoulsMap={oppFoulsMap}
             onDeleteEvent={handleDeleteScoreEvent}
             onAddEvent={handleAddScoreEvent}
+            onChangeEventPlayer={handleChangeEventPlayer}
             onFoulEdit={handleFoulEdit}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
