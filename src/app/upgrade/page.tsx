@@ -101,6 +101,12 @@ function UpgradeContent() {
             </div>
           ))}
         </div>
+
+        <div className="flex justify-center gap-3 flex-wrap text-[10px]" style={{ color: 'var(--muted)' }}>
+          <Link href="/tokushoho" className="underline">特定商取引法に基づく表記</Link>
+          <Link href="/terms" className="underline">利用規約</Link>
+          <Link href="/privacy" className="underline">プライバシーポリシー</Link>
+        </div>
       </div>
     </main>
   )

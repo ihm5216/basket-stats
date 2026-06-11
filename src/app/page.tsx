@@ -217,6 +217,11 @@ export default function Home() {
           <Link href="/login" className="hover:text-white transition-colors">ログイン</Link>
           <Link href="/signup" className="hover:text-white transition-colors">新規登録</Link>
         </div>
+        <div className="mb-2 flex justify-center gap-4 flex-wrap">
+          <Link href="/terms" className="hover:text-white transition-colors">利用規約</Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">プライバシーポリシー</Link>
+          <Link href="/tokushoho" className="hover:text-white transition-colors">特定商取引法に基づく表記</Link>
+        </div>
         © 2025 BasketStats
       </footer>
     </main>

@@ -157,6 +157,13 @@ export default function SignupPage() {
               </div>
             </button>
 
+            <p className="text-[10px] text-center mt-2 leading-relaxed" style={{ color: 'var(--muted)' }}>
+              登録することで
+              <Link href="/terms" className="underline">利用規約</Link>
+              と
+              <Link href="/privacy" className="underline">プライバシーポリシー</Link>
+              に同意したものとみなされます
+            </p>
           </div>
         )}
 
