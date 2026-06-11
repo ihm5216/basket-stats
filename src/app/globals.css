@@ -137,8 +137,25 @@ body {
 .modal-slideup { animation: slideUp 0.25s ease-out; }
 
 /* ─── 印刷スタイル ─── */
+/* JBA公式スコアシート: 画面上は非表示・印刷時のみ表示 */
+#jba-print-sheet { display: none; }
+
 @media print {
+  @page { size: A4 portrait; margin: 6mm; }
   body { background: white !important; color: black !important; }
   .print\\:hidden { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* 公式スコアシートのみを印刷する */
+  body * { visibility: hidden; }
+  #jba-print-sheet, #jba-print-sheet * { visibility: visible; }
+  #jba-print-sheet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    z-index: 9999;
+  }
 }

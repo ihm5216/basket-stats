@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Game, Player, PlayerStat } from '@/types'
 import { calcPoints } from '@/lib/stats'
+import JBAOfficialSheet from './JBAOfficialSheet'
 
 type StatKey = keyof Omit<PlayerStat, 'id' | 'game_id' | 'player_id'>
 type PendingChange = { playerId: string; key: StatKey; delta: number; gid: number }
@@ -1386,6 +1387,18 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
           />
         )}
       </div>
+
+      {/* 印刷専用: JBA公式スコアシート（画面上は非表示） */}
+      <JBAOfficialSheet
+        game={game}
+        players={players}
+        statsMap={statsMap}
+        scoreEvents={scoreEvents}
+        oppPlayerList={oppPlayerList}
+        gameId={game.id}
+        homeTimeoutRecords={homeTimeoutRecords}
+        oppTimeoutRecords={oppTimeoutRecords}
+      />
     </div>
   )
 }
