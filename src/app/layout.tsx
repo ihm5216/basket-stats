@@ -24,6 +24,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",  // iPhoneノッチ・ホームバー対応
+  themeColor: "#091929", // Androidのブラウザ/ステータスバーをアプリ背景色に
 };
 
 export default function RootLayout({
