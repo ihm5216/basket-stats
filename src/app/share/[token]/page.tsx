@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { aggregateSeasonStats } from '@/lib/stats'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -115,13 +116,14 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
             <h2 className="text-lg font-semibold text-white mb-4">試合結果</h2>
             <div className="flex flex-col gap-3">
               {games.map((game: { id: string; opponent: string; game_date: string; our_score: number; opponent_score: number; location?: string }) => (
-                <div key={game.id} className="card flex items-center justify-between">
+                <Link key={game.id} href={`/share/${token}/${game.id}`} className="card flex items-center justify-between hover:border-orange-500/50 transition-colors">
                   <div>
                     <div className="font-medium text-white">vs {game.opponent}</div>
                     <div className="text-sm text-[var(--muted)]">
                       {format(new Date(game.game_date), 'M月d日（E）', { locale: ja })}
                       {game.location ? ` · ${game.location}` : ''}
                     </div>
+                    <div className="text-xs text-orange-400 mt-1">📋 スコアシートを見る →</div>
                   </div>
                   <div className="text-right">
                     <div className={`text-lg font-bold ${game.our_score > game.opponent_score ? 'text-green-400' : 'text-red-400'}`}>
@@ -129,7 +131,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                     </div>
                     <div className="text-xs text-[var(--muted)]">{game.our_score > game.opponent_score ? '○ 勝' : '● 負'}</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>

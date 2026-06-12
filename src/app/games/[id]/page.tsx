@@ -1390,8 +1390,8 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
       }),
       ...(shareToken ? [
         '',
-        '📊 スコアシート・詳しいスタッツはこちら👇',
-        `${window.location.origin}/share/${shareToken}`,
+        '📋 この試合のスコアシートはこちら👇',
+        `${window.location.origin}/share/${shareToken}/${game.id}`,
       ] : []),
     ]
     return lines.join('\n')
