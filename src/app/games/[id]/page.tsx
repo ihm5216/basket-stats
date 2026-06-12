@@ -30,6 +30,8 @@ type AddEventRequest = {
   player_id?: string
 }
 type TimeoutRecord = { quarter: number; minute: number }
+// ファウル発生イベント（スコアシートのQ別チームファウル・前後半区切り線用）
+type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: keyof OppFoulData }
 
 const STAT_BUTTONS: { label: string; key: StatKey; delta: number; category: 'made' | 'missed' | 'neutral' }[] = [
   { label: '2P 成功', key: 'fg2_made', delta: 1, category: 'made' },
@@ -634,7 +636,12 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 }
 
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords }: {
+// ファウル種別 → スコアシート表記
+function foulLabel(t: keyof OppFoulData): string {
+  return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
+}
+
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
@@ -645,7 +652,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
   homeTimeoutRecords?: TimeoutRecord[]
   oppTimeoutRecords?: TimeoutRecord[]
+  foulEvents?: FoulEvent[]
+  currentQuarter?: number
 }) {
+  // 進行中のQ（終了済みQのチームファウルやTO未使用マスの「消し込み」判定に使う）
+  const curQ = game.is_finished ? 99 : (currentQuarter ?? game.quarter ?? 1)
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [changeSel, setChangeSel] = useState('')  // 選手変更ダイアログの選択値
   const [addDialog, setAddDialog] = useState(false)
@@ -748,8 +759,18 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
     return <span style={{border:'1px solid #333', borderRadius:'50%', padding:'0 2px', fontSize:7, lineHeight:1}}>{mark.num || '—'}</span>
   }
 
+  // 二重線（未使用マスの消し込み）マーク
+  function doubleLine(width: number) {
+    return (
+      <span style={{display:'inline-block', width, verticalAlign:'middle'}}>
+        <span style={{display:'block', borderTop:'1px solid #555', marginBottom:2}} />
+        <span style={{display:'block', borderTop:'1px solid #555'}} />
+      </span>
+    )
+  }
+
   // チーム別プレイヤーテーブル
-  function TeamSection({ teamLabel, playerList, starters, subs, getStats, isHome, timeoutRecs }: {
+  function TeamSection({ teamLabel, playerList, starters, subs, getStats, isHome, timeoutRecs, sideEvents }: {
     teamLabel: string
     playerList: { id: string; number: string; name: string }[]
     starters: Map<number, Set<string>>
@@ -757,6 +778,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
     getStats: (id: string) => PlayerStat | undefined
     isHome: boolean
     timeoutRecs?: TimeoutRecord[]
+    sideEvents?: FoulEvent[]
   }) {
     return (
       <div style={{border:'2px solid #333', marginBottom:6}}>
@@ -767,28 +789,69 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           background:'#f5f5f0'
         }}>
           <span style={{fontWeight:'bold', fontSize:10}}>{teamLabel}</span>
-          <div style={{display:'flex', gap:2, alignItems:'center'}}>
-            <span style={{fontSize:6, color:'#666'}}>タイムアウト</span>
+        </div>
+
+        {/* タイムアウト（残り分を記入・終了Qの未使用マスは二重線で消し込み） */}
+        <div style={{borderBottom:'1px solid #aaa', padding:'2px 5px', display:'flex', gap:3, alignItems:'center', background:'#fafaf6'}}>
+          <span style={{fontSize:7, color:'#444', fontWeight:'bold', marginRight:1}}>タイムアウト</span>
+          {[1,2,3,4].map(q => {
+            const rec = timeoutRecs?.find(r => r.quarter === q)
+            const ended = curQ > q
+            return (
+              <span key={q} style={{
+                width:26, border: rec ? '1.5px solid #c00' : '1px solid #999', borderRadius:3,
+                display:'inline-flex', flexDirection:'column', alignItems:'center', padding:'1px 0',
+                background: rec ? '#fff0f0' : '#fff'
+              }}>
+                <span style={{fontSize:6, color:'#888', lineHeight:1.1}}>Q{q}</span>
+                {rec
+                  ? <span style={{fontSize:9, fontWeight:'bold', color:'#c00', lineHeight:1.2}}>残{rec.minute}</span>
+                  : ended
+                    ? doubleLine(14)
+                    : <span style={{fontSize:9, lineHeight:1.2, color:'transparent'}}>0</span>}
+              </span>
+            )
+          })}
+          {(timeoutRecs?.some(r => r.quarter >= 5)) && (
+            <span style={{
+              width:26, border:'1.5px solid #c00', borderRadius:3,
+              display:'inline-flex', flexDirection:'column', alignItems:'center', padding:'1px 0', background:'#fff0f0'
+            }}>
+              <span style={{fontSize:6, color:'#888', lineHeight:1.1}}>OT</span>
+              <span style={{fontSize:9, fontWeight:'bold', color:'#c00', lineHeight:1.2}}>残{timeoutRecs?.find(r => r.quarter >= 5)?.minute}</span>
+            </span>
+          )}
+        </div>
+
+        {/* チームファウル（Q別・×で消し込み、終了Qの未使用マスは二重線） */}
+        {sideEvents && (
+          <div style={{borderBottom:'1px solid #aaa', padding:'2px 5px', display:'flex', gap:4, alignItems:'center', background:'#fafaf6', flexWrap:'wrap'}}>
+            <span style={{fontSize:7, color:'#444', fontWeight:'bold'}}>チームファウル</span>
             {[1,2,3,4].map(q => {
-              const rec = timeoutRecs?.find(r => r.quarter === q)
+              // OT中のファウルは第4Qの欄に加算（FIBA準拠）
+              const cnt = sideEvents.filter(e => q === 4 ? e.quarter >= 4 : e.quarter === q).length
+              const ended = curQ > q
               return (
-                <span key={q} style={{
-                  width:16, height:11, border: rec ? '1.5px solid #c00' : '1px solid #aaa', borderRadius:3,
-                  display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:5,
-                  background: rec ? '#fff0f0' : 'transparent', color: rec ? '#c00' : '#888',
-                  fontWeight: rec ? 'bold' : 'normal'
-                }}>{rec ? `Q${q}:残${rec.minute}` : `Q${q}`}</span>
+                <span key={q} style={{display:'inline-flex', alignItems:'center', gap:1}}>
+                  <span style={{fontSize:6, color:'#888', marginRight:1}}>Q{q}</span>
+                  {[1,2,3,4].map(n => (
+                    <span key={n} style={{
+                      width:11, height:13, border:'1px solid #999', display:'inline-flex',
+                      alignItems:'center', justifyContent:'center',
+                      background: n <= cnt ? '#fff0f0' : '#fff'
+                    }}>
+                      {n <= cnt
+                        ? <span style={{fontSize:10, fontWeight:'bold', color:'#c00', lineHeight:1}}>×</span>
+                        : ended
+                          ? doubleLine(7)
+                          : <span style={{fontSize:7, color:'#bbb'}}>{n}</span>}
+                    </span>
+                  ))}
+                </span>
               )
             })}
-            {(timeoutRecs?.some(r => r.quarter >= 5)) && (
-              <span style={{
-                width:18, height:11, border:'1.5px solid #c00', borderRadius:3,
-                display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:5,
-                background:'#fff0f0', color:'#c00', fontWeight:'bold'
-              }}>OT:{timeoutRecs?.find(r => r.quarter >= 5)?.minute}</span>
-            )}
           </div>
-        </div>
+        )}
 
         {/* 選手テーブル */}
         <table style={{borderCollapse:'collapse', width:'100%', tableLayout:'fixed', fontSize:7}}>
@@ -825,7 +888,15 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               const stat = getStats(p.id)
               const fouls = stat ? getTotalFouls(stat) : 0
               const foulNotation = stat ? getFoulNotation(stat) : ''
-              const foulParts = foulNotation.split(' ').filter(x => x)
+              // ファウルイベント（時系列）がスタッツと整合する場合はそちらを優先表示し、
+              // 前半（Q1-2）と後半（Q3-4/OT）の区切り太線を引けるようにする
+              const pEvents = (sideEvents ?? []).filter(e => e.key === p.id)
+              const useChrono = pEvents.length > 0 && pEvents.length === fouls
+              const foulParts = useChrono
+                ? pEvents.map(e => foulLabel(e.foulType))
+                : foulNotation.split(' ').filter(x => x)
+              // 前半に犯したファウル数（太線の位置）。後半に入るまでは線を引かない
+              const halfCount = useChrono && curQ >= 3 ? pEvents.filter(e => e.quarter <= 2).length : -1
               return (
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
@@ -847,6 +918,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   {[1,2,3,4,5].map(f => {
                     const part = foulParts[f-1]
                     const isEmpty = !part && f === fouls + 1 && onFoulEdit
+                    // 前半/後半の区切り太線（前半のファウルの右端に引く。前半0個なら1マス目の左端）
+                    const halfRight = halfCount > 0 && f === halfCount
+                    const halfLeft = halfCount === 0 && fouls > 0 && f === 1
+                    // 試合終了後、未使用マスは横線で消し込み（公式ルール）。タップでの追加は引き続き可能
+                    const unusedLine = game.is_finished && !part
                     return (
                       <td key={f}
                         onClick={onFoulEdit ? (
@@ -856,9 +932,13 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                               ? () => setFoulAddModal({ playerId: p.id, isHome, playerNum: p.number })
                               : undefined
                         ) : undefined}
-                        style={{border:B, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px', cursor: onFoulEdit && (part || isEmpty) ? 'pointer' : 'default', background: part && onFoulEdit ? 'rgba(220,38,38,0.07)' : isEmpty ? 'rgba(0,180,0,0.05)' : undefined}}
+                        style={{border:B, borderRight: halfRight ? '2px solid #111' : B, borderLeft: halfLeft ? '2px solid #111' : undefined, textAlign:'center', fontSize:6, color:'#c00', fontWeight:'bold', lineHeight:'11px', verticalAlign:'top', paddingTop:'1px', cursor: onFoulEdit && (part || isEmpty) ? 'pointer' : 'default', background: part && onFoulEdit ? 'rgba(220,38,38,0.07)' : isEmpty && !game.is_finished ? 'rgba(0,180,0,0.05)' : undefined}}
                       >
-                        {part ?? (isEmpty ? <span style={{color:'#aaa', fontSize:9, fontWeight:'normal'}}>＋</span> : '')}
+                        {part ?? (
+                          unusedLine
+                            ? <span style={{display:'inline-block', width:'70%', borderTop:'1px solid #444', verticalAlign:'middle'}} />
+                            : isEmpty ? <span style={{color:'#aaa', fontSize:9, fontWeight:'normal'}}>＋</span> : ''
+                        )}
                       </td>
                     )
                   })}
@@ -930,6 +1010,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             getStats={id => statsMap.get(id)}
             isHome={true}
             timeoutRecs={homeTimeoutRecords}
+            sideEvents={foulEvents?.filter(e => e.team === 'us')}
           />
           {/* Qスコア & チームファウル（両チーム間に1回のみ） */}
           <div style={{border:'1px solid #888', margin:'3px 0', background:'#f8f8f4'}}>
@@ -992,6 +1073,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             }}
             isHome={false}
             timeoutRecs={oppTimeoutRecords}
+            sideEvents={foulEvents?.filter(e => e.team === 'opponent')}
           />
         </div>
 
@@ -1237,12 +1319,31 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
+  // LINE共有用: チームの共有トークンを取得
+  const [shareToken, setShareToken] = useState('')
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.from('teams').select('share_token').eq('id', game.team_id).maybeSingle()
+      .then(({ data }) => { if (data?.share_token) setShareToken(data.share_token) })
+  }, [game.team_id])
   // court_data_json からタイムアウト記録を復元
   const homeTimeoutRecords: TimeoutRecord[] = (() => {
     try { const cd = game.court_data_json as { homeTimeouts?: TimeoutRecord[] }; return cd?.homeTimeouts ?? [] } catch { return [] }
   })()
   const oppTimeoutRecords: TimeoutRecord[] = (() => {
     try { const cd = game.court_data_json as { oppTimeouts?: TimeoutRecord[] }; return cd?.oppTimeouts ?? [] } catch { return [] }
+  })()
+  // ファウルイベント（court_data_json優先・localStorageフォールバック）
+  const finishedFoulEvents: FoulEvent[] = (() => {
+    try {
+      const cd = game.court_data_json as { foulEvents?: FoulEvent[] }
+      if (cd?.foulEvents?.length) return cd.foulEvents
+    } catch { /* ignore */ }
+    try {
+      const fe = localStorage.getItem(`foul_events_${game.id}`)
+      if (fe) return JSON.parse(fe)
+    } catch { /* ignore */ }
+    return []
   })()
   // 試合に登録された選手のうち、スタッツが存在する選手のみ表示
   const rows = players
@@ -1286,6 +1387,11 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
         if (stat.steals > 0) parts.push(`S${stat.steals}`)
         return `#${player.number || '—'} ${player.name}: ${parts.join(' ')}`
       }),
+      ...(shareToken ? [
+        '',
+        '📊 スコアシート・詳しいスタッツはこちら👇',
+        `${window.location.origin}/share/${shareToken}`,
+      ] : []),
     ]
     return lines.join('\n')
   }
@@ -1426,6 +1532,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             onFoulEdit={onFoulEdit}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
+            foulEvents={finishedFoulEvents}
           />
         )}
       </div>
@@ -1616,6 +1723,23 @@ export default function GamePage() {
   const [homeTimeoutRecords, setHomeTimeoutRecords] = useState<TimeoutRecord[]>([])
   const [oppTimeoutRecords, setOppTimeoutRecords] = useState<TimeoutRecord[]>([])
   const [timeoutModal, setTimeoutModal] = useState<{ team: 'home' | 'opp' } | null>(null)
+  // ファウルイベント（Q別チームファウル・前後半区切り線用）
+  const [foulEvents, setFoulEvents] = useState<FoulEvent[]>([])
+
+  function pushFoulEvent(team: 'us' | 'opponent', key: string, foulType: keyof OppFoulData) {
+    setFoulEvents(prev => [...prev, { quarter: currentQuarter, team, key, foulType }])
+  }
+  function removeLastFoulEvent(team: 'us' | 'opponent', key: string, foulType?: keyof OppFoulData) {
+    setFoulEvents(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        const e = prev[i]
+        if (e.team === team && e.key === key && (!foulType || e.foulType === foulType)) {
+          return [...prev.slice(0, i), ...prev.slice(i + 1)]
+        }
+      }
+      return prev
+    })
+  }
 
   // Q毎の得点（OT含む動的集計）
   const maxQuarterInEvents = useMemo(() => Math.max(4, ...scoreEvents.map(e => e.quarter), currentQuarter), [scoreEvents, currentQuarter])
@@ -1652,6 +1776,11 @@ export default function GamePage() {
     if (loading) return
     localStorage.setItem(`score_events_${id}`, JSON.stringify(scoreEvents))
   }, [scoreEvents, id, loading])
+
+  useEffect(() => {
+    if (loading) return
+    localStorage.setItem(`foul_events_${id}`, JSON.stringify(foulEvents))
+  }, [foulEvents, id, loading])
 
   // scoreEvents が変わったら Supabase に遅延同期（LINE共有等のクロスデバイス対応）
   // pending による saveStats とは独立して動作し、opponent スコアのみの場合もカバーする
@@ -1817,10 +1946,14 @@ export default function GamePage() {
           scoresheetOv?: unknown
           homeTimeouts?: TimeoutRecord[]
           oppTimeouts?: TimeoutRecord[]
+          foulEvents?: FoulEvent[]
         }
         // タイムアウト記録の復元
         if (cd.homeTimeouts?.length) setHomeTimeoutRecords(cd.homeTimeouts)
         if (cd.oppTimeouts?.length) setOppTimeoutRecords(cd.oppTimeouts)
+        // ファウルイベントの復元（localStorage優先）
+        if (!localStorage.getItem(`foul_events_${id}`) && cd.foulEvents?.length)
+          localStorage.setItem(`foul_events_${id}`, JSON.stringify(cd.foulEvents))
         for (let q = 1; q <= 4; q++) {
           const qs = String(q)
           if (!localStorage.getItem(`court_q${q}_${id}`) && cd.homeStarters?.[qs]?.length)
@@ -1858,6 +1991,12 @@ export default function GamePage() {
       }
     } catch { /* ignore */ }
 
+    // ファウルイベントを復元
+    try {
+      const fe = localStorage.getItem(`foul_events_${id}`)
+      if (fe) setFoulEvents(JSON.parse(fe))
+    } catch { /* ignore */ }
+
     setLoading(false)
   }
 
@@ -1884,6 +2023,7 @@ export default function GamePage() {
     }
     setPending(prev => [...prev, { playerId, key: foulKey, delta: 1, gid }])
     setTeamFouls(prev => prev + 1)
+    pushFoulEvent('us', playerId, foulKey as keyof OppFoulData)
     setFoulDialog({ isOpen: false })
     setSelectedPlayer(null)
   }
@@ -1905,6 +2045,7 @@ export default function GamePage() {
       if (newTotal >= 5) setFoulOutAlert({ playerName: selectedPlayer.name, playerNumber: selectedPlayer.number })
       setPending(prev => [...prev, { playerId: selectedPlayer.id, key: 'technical_fouls', delta: 1, gid }])
       setTeamFouls(prev => prev + 1)
+      pushFoulEvent('us', selectedPlayer.id, 'technical_fouls')
       setSelectedPlayer(null)
       return
     }
@@ -1969,7 +2110,11 @@ export default function GamePage() {
           return removeAndAdjust(prev, idx)
         })
       }
-      if (group.find(c => ['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(c.key))) setTeamFouls(t => Math.max(0, t - 1))
+      const foulChange = group.find(c => ['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(c.key))
+      if (foulChange) {
+        setTeamFouls(t => Math.max(0, t - 1))
+        removeLastFoulEvent('us', foulChange.playerId, foulChange.key as keyof OppFoulData)
+      }
     }
 
     if (pending.length > 0) {
@@ -2080,9 +2225,13 @@ export default function GamePage() {
       skipUndoStackRef.current = true
       setPending(prev => [...prev, { playerId, key: foulType as StatKey, delta, gid }])
       setTeamFouls(prev => Math.max(0, prev + delta))
+      if (delta > 0) pushFoulEvent('us', playerId, foulType)
+      else removeLastFoulEvent('us', playerId, foulType)
     } else {
       // 相手チーム: oppFoulsMapを更新してlocalStorageにも保存
       setOppTeamFouls(prev => Math.max(0, prev + delta))
+      if (delta > 0) pushFoulEvent('opponent', playerId, foulType)
+      else removeLastFoulEvent('opponent', playerId, foulType)
       setOppFoulsMap(prev => {
         const current = prev[playerId] ?? emptyOppFoul()
         const updated: OppFoulData = { ...current, [foulType]: Math.max(0, current[foulType] + delta) }
@@ -2114,6 +2263,7 @@ export default function GamePage() {
       : ftCount === 2 ? 'fouls_2ft'
       : 'fouls_3ft'
     setOppTeamFouls(prev => prev + 1)
+    pushFoulEvent('opponent', playerKey, field)
     setOppFoulsMap(prev => {
       const current = prev[playerKey] ?? emptyOppFoul()
       const updated: OppFoulData = { ...current, [field]: current[field] + 1 }
@@ -2327,9 +2477,12 @@ export default function GamePage() {
         }
         let scoresheetOv: unknown = null
         try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
+        let foulEvs: unknown = null
+        try { const fe = localStorage.getItem(`foul_events_${id}`); if (fe) foulEvs = JSON.parse(fe) } catch { /* ignore */ }
         return {
           homeStarters, oppStarters, homeSubs, oppSubs,
           ...(scoresheetOv ? { scoresheetOv } : {}),
+          ...(foulEvs ? { foulEvents: foulEvs } : {}),
           homeTimeouts: homeTimeoutRecords,
           oppTimeouts: oppTimeoutRecords,
         }
@@ -2446,7 +2599,16 @@ export default function GamePage() {
       }
       let scoresheetOv: unknown = null
       try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
-      return { homeStarters, oppStarters, homeSubs, oppSubs, ...(scoresheetOv ? { scoresheetOv } : {}) }
+      let foulEvs: unknown = null
+      try { const fe = localStorage.getItem(`foul_events_${id}`); if (fe) foulEvs = JSON.parse(fe) } catch { /* ignore */ }
+      return {
+        homeStarters, oppStarters, homeSubs, oppSubs,
+        ...(scoresheetOv ? { scoresheetOv } : {}),
+        ...(foulEvs ? { foulEvents: foulEvs } : {}),
+        // タイムアウト記録も忘れずに含める（以前はここで欠落し、試合終了後に消えていた）
+        homeTimeouts: homeTimeoutRecords,
+        oppTimeouts: oppTimeoutRecords,
+      }
     })()
     await supabase.from('games').update({
       is_finished: true,
@@ -2717,6 +2879,8 @@ export default function GamePage() {
             onAddEvent={handleAddScoreEvent}
             onChangeEventPlayer={handleChangeEventPlayer}
             onFoulEdit={handleFoulEdit}
+            foulEvents={foulEvents}
+            currentQuarter={currentQuarter}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
           />

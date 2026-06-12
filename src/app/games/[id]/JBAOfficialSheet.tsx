@@ -21,6 +21,11 @@ type ScoreEvent = {
 type OppPlayer = { key: string; number: string; name: string }
 type TimeoutRecord = { quarter: number; minute: number }
 type RunMark = { type: '2P' | '3P' | 'FT'; num: string; quarter: number }
+type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: string }
+
+function foulLabel(t: string): string {
+  return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
+}
 
 type CourtData = {
   homeStarters?: Record<string, string[]>
@@ -30,6 +35,7 @@ type CourtData = {
   scoresheetOv?: {
     oppPlayers?: Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number }>
   }
+  foulEvents?: FoulEvent[]
 }
 
 const BK = '0.15mm solid #000'
@@ -87,6 +93,16 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
   const oppStarters = useMemo(() => readQSets(cd.oppStarters, 'court_opp_q', gameId), [cd.oppStarters, gameId])
   const homeSubs = useMemo(() => readQSets(cd.homeSubs, 'sub_q', gameId), [cd.homeSubs, gameId])
   const oppSubs = useMemo(() => readQSets(cd.oppSubs, 'sub_opp_q', gameId), [cd.oppSubs, gameId])
+
+  // ファウルイベント（Q別チームファウル・前後半区切り線用）
+  const foulEvents = useMemo<FoulEvent[]>(() => {
+    if (cd.foulEvents?.length) return cd.foulEvents
+    try {
+      const fe = localStorage.getItem(`foul_events_${gameId}`)
+      if (fe) return JSON.parse(fe)
+    } catch { /* ignore */ }
+    return []
+  }, [cd.foulEvents, gameId])
 
   // 相手チームのファウル（court_data_json → localStorage フォールバック）
   const oppFouls = useMemo(() => {
@@ -150,45 +166,63 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
     )
   }
 
-  // ── 部品: タイムアウト欄 ──
+  // ── 部品: 二本線（未使用マスの消し込み） ──
+  function DoubleLine({ width }: { width: string }) {
+    return (
+      <span style={{ display: 'inline-block', width, verticalAlign: 'middle' }}>
+        <span style={{ display: 'block', borderTop: '0.15mm solid #000', marginBottom: '0.8mm' }} />
+        <span style={{ display: 'block', borderTop: '0.15mm solid #000' }} />
+      </span>
+    )
+  }
+
+  // ── 部品: タイムアウト欄（未使用マスは二本線で消し込み） ──
   function TimeoutBoxes({ recs }: { recs?: TimeoutRecord[] }) {
     const firstHalf = (recs ?? []).filter(r => r.quarter <= 2).slice(0, 2)
     const secondHalf = (recs ?? []).filter(r => r.quarter === 3 || r.quarter === 4).slice(0, 3)
     const ot = (recs ?? []).filter(r => r.quarter >= 5).slice(0, 1)
-    const box = (val?: number, key?: number) => (
-      <span key={key} style={{ display: 'inline-block', width: '4.5mm', height: '4mm', border: BK, textAlign: 'center', fontSize: '2.6mm', lineHeight: '4mm', verticalAlign: 'middle', marginRight: '0.5mm' }}>
-        {val !== undefined ? val : ' '}
+    const box = (rec: TimeoutRecord | undefined, key: number, crossUnused: boolean) => (
+      <span key={key} style={{ display: 'inline-flex', width: '4.5mm', height: '4mm', border: BK, alignItems: 'center', justifyContent: 'center', fontSize: '2.6mm', verticalAlign: 'middle', marginRight: '0.5mm' }}>
+        {rec !== undefined ? rec.minute : crossUnused ? <DoubleLine width="3mm" /> : ' '}
       </span>
     )
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '2mm', fontSize: '2.4mm' }}>
         <span style={{ fontWeight: 'bold' }}>タイムアウト</span>
-        <span>前半 {[0, 1].map(i => box(firstHalf[i]?.minute, i))}</span>
-        <span>後半 {[0, 1, 2].map(i => box(secondHalf[i]?.minute, i))}</span>
-        <span>延長 {[0].map(i => box(ot[i]?.minute, i))}</span>
+        <span>前半 {[0, 1].map(i => box(firstHalf[i], i, true))}</span>
+        <span>後半 {[0, 1, 2].map(i => box(secondHalf[i], i, true))}</span>
+        <span>延長 {[0].map(i => box(ot[i], i, false))}</span>
       </div>
     )
   }
 
-  // ── 部品: チームファウル欄（記入式・データ未取得のため空欄） ──
-  function TeamFoulBoxes() {
+  // ── 部品: チームファウル欄（×で消し込み・未使用マスは二重線） ──
+  function TeamFoulBoxes({ sideEvents }: { sideEvents: FoulEvent[] }) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5mm', fontSize: '2.4mm' }}>
         <span style={{ fontWeight: 'bold' }}>チームファウル</span>
-        {[1, 2, 3, 4].map(q => (
-          <span key={q} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3mm' }}>
-            <span style={{ fontSize: '2.2mm' }}>第{q}Q</span>
-            {[1, 2, 3, 4].map(n => (
-              <span key={n} style={{ display: 'inline-block', width: '3.2mm', height: '3.6mm', border: BK, textAlign: 'center', fontSize: '2.2mm', lineHeight: '3.6mm' }}>{n}</span>
-            ))}
-          </span>
-        ))}
+        {[1, 2, 3, 4].map(q => {
+          // OT中のファウルは第4Qの欄に加算（FIBA準拠）
+          const cnt = sideEvents.filter(e => q === 4 ? e.quarter >= 4 : e.quarter === q).length
+          return (
+            <span key={q} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3mm' }}>
+              <span style={{ fontSize: '2.2mm' }}>第{q}Q</span>
+              {[1, 2, 3, 4].map(n => (
+                <span key={n} style={{ display: 'inline-flex', width: '3.2mm', height: '3.6mm', border: BK, alignItems: 'center', justifyContent: 'center', fontSize: '2.2mm' }}>
+                  {n <= cnt
+                    ? <span style={{ fontWeight: 'bold', fontSize: '3mm' }}>×</span>
+                    : <DoubleLine width="2.2mm" />}
+                </span>
+              ))}
+            </span>
+          )
+        })}
       </div>
     )
   }
 
   // ── 部品: チームの選手テーブル ──
-  function TeamTable({ label, name, list, starters, subs, getFouls, timeoutRecs }: {
+  function TeamTable({ label, name, list, starters, subs, getFouls, timeoutRecs, sideEvents }: {
     label: 'A' | 'B'
     name: string
     list: { id: string; number: string; name: string }[]
@@ -196,6 +230,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
     subs: Map<number, Set<string>>
     getFouls: (id: string) => string[]
     timeoutRecs?: TimeoutRecord[]
+    sideEvents: FoulEvent[]
   }) {
     const q1 = starters.get(1) ?? new Set<string>()
     const playedSet = new Set<string>()
@@ -209,7 +244,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
           <span style={{ borderBottom: BK, flex: 1, fontSize: '3mm', fontWeight: 'bold', paddingLeft: '1mm' }}>{name}</span>
         </div>
         <div style={{ borderBottom: BK, padding: '0.6mm 1.5mm' }}><TimeoutBoxes recs={timeoutRecs} /></div>
-        <div style={{ borderBottom: BK, padding: '0.6mm 1.5mm' }}><TeamFoulBoxes /></div>
+        <div style={{ borderBottom: BK, padding: '0.6mm 1.5mm' }}><TeamFoulBoxes sideEvents={sideEvents} /></div>
         <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '13mm' }} />
@@ -230,7 +265,12 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
           <tbody>
             {Array.from({ length: 15 }, (_, i) => {
               const p = list[i]
-              const parts = p ? getFouls(p.id) : []
+              const statParts = p ? getFouls(p.id) : []
+              // 時系列イベントがスタッツと整合する場合はそちらを優先（前後半の区切り線を引ける）
+              const pEvents = p ? sideEvents.filter(e => e.key === p.id) : []
+              const useChrono = pEvents.length > 0 && pEvents.length === statParts.length
+              const parts = useChrono ? pEvents.map(e => foulLabel(e.foulType)) : statParts
+              const halfCount = useChrono ? pEvents.filter(e => e.quarter <= 2).length : -1
               const isStarter = p ? q1.has(p.id) : false
               const played = p ? playedSet.has(p.id) || parts.length > 0 : false
               return (
@@ -243,9 +283,17 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
                       ? <span style={{ display: 'inline-block', width: '3.6mm', height: '3.6mm', border: '0.3mm solid #000', borderRadius: '50%', lineHeight: '3.4mm' }}>×</span>
                       : played ? '×' : ''}
                   </td>
-                  {[0, 1, 2, 3, 4].map(f => (
-                    <td key={f} style={{ border: BK, textAlign: 'center', fontSize: '2.3mm', fontWeight: 'bold' }}>{parts[f] ?? ''}</td>
-                  ))}
+                  {[0, 1, 2, 3, 4].map(f => {
+                    const cellNo = f + 1
+                    // 前半/後半の区切り太線（公式: 前半のファウルを太線で囲む）
+                    const halfRight = halfCount > 0 && cellNo === halfCount
+                    const halfLeft = halfCount === 0 && parts.length > 0 && cellNo === 1
+                    return (
+                      <td key={f} style={{ border: BK, borderRight: halfRight ? THICK : BK, borderLeft: halfLeft ? THICK : undefined, textAlign: 'center', fontSize: '2.3mm', fontWeight: 'bold' }}>
+                        {parts[f] ?? (p ? <span style={{ display: 'inline-block', width: '70%', borderTop: '0.15mm solid #000', verticalAlign: 'middle' }} /> : '')}
+                      </td>
+                    )
+                  })}
                 </tr>
               )
             })}
@@ -326,6 +374,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
           <div style={{ flex: '0 0 100mm' }}>
             <TeamTable
               label="A" name={nameA}
+              sideEvents={foulEvents.filter(e => e.team === 'us')}
               list={players.map(p => ({ id: p.id, number: p.number ?? '', name: p.name }))}
               starters={homeStarters} subs={homeSubs}
               getFouls={id => foulParts(statsMap.get(id))}
@@ -333,6 +382,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
             />
             <TeamTable
               label="B" name={nameB}
+              sideEvents={foulEvents.filter(e => e.team === 'opponent')}
               list={oppPlayerList.map(p => ({ id: p.key, number: p.number, name: p.name }))}
               starters={oppStarters} subs={oppSubs}
               getFouls={id => foulParts(oppFouls?.[id] ? {
