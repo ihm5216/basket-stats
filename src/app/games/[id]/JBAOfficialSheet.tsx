@@ -327,6 +327,9 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
     const color = qColor(mark?.quarter)
     const slash = mark && (mark.type === '2P' || mark.type === '3P')
     const filled = mark?.type === 'FT'
+    const inner = filled
+      ? <span style={{ display: 'inline-block', width: '3.2mm', height: '3.2mm', borderRadius: '50%', background: color, verticalAlign: 'middle' }} />
+      : n
     return (
       <td key={key} style={{
         border: BK,
@@ -337,9 +340,10 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
           ? `linear-gradient(to top right, transparent 45%, ${color} 45%, ${color} 55%, transparent 55%)`
           : undefined,
       }}>
-        {filled
-          ? <span style={{ display: 'inline-block', width: '3.2mm', height: '3.2mm', borderRadius: '50%', background: color, verticalAlign: 'middle' }} />
-          : n}
+        {isQEnd && mark
+          // ピリオド終了: 最後の得点数字を太い丸で囲む（公式記入ルール）
+          ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.8mm', height: '3.8mm', border: `0.45mm solid ${color}`, borderRadius: '50%', verticalAlign: 'middle' }}>{inner}</span>
+          : inner}
       </td>
     )
   }
