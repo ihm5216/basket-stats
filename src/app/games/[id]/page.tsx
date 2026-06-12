@@ -823,8 +823,9 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           )}
         </div>
 
-        {/* チームファウル（Q別・×で消し込み、終了Qの未使用マスは二重線） */}
-        {sideEvents && (
+        {/* チームファウル（Q別・×で消し込み、終了Qの未使用マスは二重線）
+            ※ファウルイベント未記録の旧試合では誤表示になるため非表示 */}
+        {sideEvents && sideEvents.length > 0 && (
           <div style={{borderBottom:'1px solid #aaa', padding:'2px 5px', display:'flex', gap:4, alignItems:'center', background:'#fafaf6', flexWrap:'wrap'}}>
             <span style={{fontSize:7, color:'#444', fontWeight:'bold'}}>チームファウル</span>
             {[1,2,3,4].map(q => {

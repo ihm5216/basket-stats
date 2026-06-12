@@ -211,7 +211,9 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
                 <span key={n} style={{ display: 'inline-flex', width: '3.2mm', height: '3.6mm', border: BK, alignItems: 'center', justifyContent: 'center', fontSize: '2.2mm' }}>
                   {n <= cnt
                     ? <span style={{ fontWeight: 'bold', fontSize: '3mm' }}>×</span>
-                    : <DoubleLine width="2.2mm" />}
+                    : sideEvents.length > 0
+                      ? <DoubleLine width="2.2mm" />
+                      : <span style={{ color: '#888' }}>{n}</span>}
                 </span>
               ))}
             </span>
