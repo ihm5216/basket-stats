@@ -170,8 +170,8 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
   function DoubleLine({ width }: { width: string }) {
     return (
       <span style={{ display: 'inline-block', width, verticalAlign: 'middle' }}>
-        <span style={{ display: 'block', borderTop: '0.15mm solid #000', marginBottom: '0.8mm' }} />
-        <span style={{ display: 'block', borderTop: '0.15mm solid #000' }} />
+        <span style={{ display: 'block', borderTop: '0.3mm solid #000', marginBottom: '0.7mm' }} />
+        <span style={{ display: 'block', borderTop: '0.3mm solid #000' }} />
       </span>
     )
   }
@@ -292,7 +292,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
                     const halfLeft = halfCount === 0 && parts.length > 0 && cellNo === 1
                     return (
                       <td key={f} style={{ border: BK, borderRight: halfRight ? THICK : BK, borderLeft: halfLeft ? THICK : undefined, textAlign: 'center', fontSize: '2.3mm', fontWeight: 'bold' }}>
-                        {parts[f] ?? (p ? <span style={{ display: 'inline-block', width: '70%', borderTop: '0.15mm solid #000', verticalAlign: 'middle' }} /> : '')}
+                        {parts[f] ?? (p ? <span style={{ display: 'inline-block', width: '70%', borderTop: '0.3mm solid #000', verticalAlign: 'middle' }} /> : '')}
                       </td>
                     )
                   })}
