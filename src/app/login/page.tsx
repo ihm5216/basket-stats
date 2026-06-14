@@ -143,7 +143,7 @@ export default function LoginPage() {
             </div>
 
             <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
-              メールでログイン
+              メールでログイン（Yahoo!等どのメールでもOK）
             </div>
 
             {/* Magic Link */}

@@ -129,7 +129,7 @@ export default function SignupPage() {
             {/* 区切り */}
             <div className="flex items-center gap-3 my-1">
               <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>またはメールで登録</span>
+              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>またはメールアドレスで登録（Yahoo!等）</span>
               <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
             </div>
 
@@ -139,8 +139,8 @@ export default function SignupPage() {
               style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', color: '#38bdf8' }}>
               <span className="text-xl ml-3">✉️</span>
               <div className="flex-1 text-left">
-                <div>メールで登録</div>
-                <div className="text-[10px] font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>パスワード不要・チーム専用アドレスも使えます</div>
+                <div>メールアドレスで登録</div>
+                <div className="text-[10px] font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>Yahoo!・docomo・iCloud などどのメールでもOK</div>
               </div>
             </button>
 
@@ -174,9 +174,9 @@ export default function SignupPage() {
               className="flex items-center gap-1 text-xs mb-1" style={{ color: 'var(--muted)' }}>
               ← 戻る
             </button>
-            <h2 className="font-bold text-white mb-1">メールで登録</h2>
+            <h2 className="font-bold text-white mb-1">メールアドレスで登録</h2>
             <p className="text-xs leading-relaxed mb-2" style={{ color: 'var(--muted)' }}>
-              チーム専用アドレス・個人アドレスどちらでもOK。<br />パスワードは設定不要です。
+              Yahoo!・docomo・iCloud・Gmail などどのメールアドレスでもOK。<br />パスワードは不要です（届いたリンクをタップするだけ）。
             </p>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>チーム名</label>
