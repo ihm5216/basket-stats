@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { authErrorMessage } from '@/lib/authError'
+import InAppBrowserNotice from '@/components/InAppBrowserNotice'
 
 type Step = 'top' | 'email' | 'sent'
 
@@ -48,7 +50,7 @@ export default function SignupPage() {
         data: { team_name: teamName.trim() },
       },
     })
-    if (error) { setError('登録に失敗しました。メールアドレスを確認してください。'); setLoading(false) }
+    if (error) { setError(authErrorMessage(error)); setLoading(false) }
     else { setStep('sent'); setLoading(false) }
   }
 
@@ -93,6 +95,8 @@ export default function SignupPage() {
           すでにアカウントをお持ちの方は{' '}
           <Link href="/login" className="text-[#38bdf8] underline">ログイン</Link>
         </p>
+
+        <InAppBrowserNotice />
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-3 mb-4">

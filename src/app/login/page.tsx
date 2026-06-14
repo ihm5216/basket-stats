@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect } from 'react'
+import { authErrorMessage } from '@/lib/authError'
+import InAppBrowserNotice from '@/components/InAppBrowserNotice'
 
 type Mode = 'top' | 'magic' | 'password' | 'sent'
 
@@ -53,7 +55,7 @@ export default function LoginPage() {
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback`, shouldCreateUser: false },
     })
-    if (error) { setError('メール送信に失敗しました。登録済みのメアドかご確認ください。'); setLoading(false) }
+    if (error) { setError(authErrorMessage(error)); setLoading(false) }
     else { setMode('sent'); setLoading(false) }
   }
 
@@ -103,6 +105,8 @@ export default function LoginPage() {
           アカウントをお持ちでない方は{' '}
           <Link href="/signup" className="text-[#38bdf8] underline">無料登録はこちら</Link>
         </p>
+
+        <InAppBrowserNotice />
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl p-3 mb-4">
