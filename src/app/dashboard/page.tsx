@@ -51,10 +51,23 @@ function DashboardContent() {
     setUserEmail(user.email ?? '')
 
     // まずチームを取得、その後ゲームを取得（RLS対応）
-    const [{ data: teamsData }, { data: subData }] = await Promise.all([
+    let [{ data: teamsData }, { data: subData }] = await Promise.all([
       supabase.from('teams').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
     ])
+
+    // 保険: 登録時トリガーでのチーム自動作成が失敗していた場合、
+    // ここでメタデータの team_name から作り直す（クライアントはRLSで自分のチームを作成可）
+    if ((teamsData ?? []).length === 0) {
+      const teamName = (user.user_metadata?.team_name as string | undefined)?.trim()
+      if (teamName) {
+        const { data: created } = await supabase
+          .from('teams')
+          .insert({ user_id: user.id, name: teamName })
+          .select('*')
+        if (created && created.length > 0) teamsData = created
+      }
+    }
 
     const teamIds = (teamsData ?? []).map((t: Team) => t.id)
     const { data: gamesData } = teamIds.length > 0
