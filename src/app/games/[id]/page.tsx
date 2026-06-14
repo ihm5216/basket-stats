@@ -1371,26 +1371,39 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
       return us > 0 || opp > 0 ? `  Q${q}: 自${us} - 相${opp}` : null
     }).filter(Boolean)
 
+    // 出場した選手（スタッツ記録がある選手）は全員記載する
+    const playerLines = rows.flatMap(({ player, stat }) => {
+      const pts = calcPoints(stat)
+      // シュート内訳（試投があった種別のみ）
+      const shoot: string[] = []
+      if (stat.fg2_attempt > 0) shoot.push(`2P ${stat.fg2_made}/${stat.fg2_attempt}`)
+      if (stat.fg3_attempt > 0) shoot.push(`3P ${stat.fg3_made}/${stat.fg3_attempt}`)
+      if (stat.ft_attempt > 0) shoot.push(`FT ${stat.ft_made}/${stat.ft_attempt}`)
+      // その他スタッツ（0より大きいものを日本語で）
+      const other: string[] = []
+      if (stat.rebounds > 0) other.push(`リバウンド${stat.rebounds}`)
+      if (stat.assists > 0) other.push(`アシスト${stat.assists}`)
+      if (stat.steals > 0) other.push(`スティール${stat.steals}`)
+      if (stat.blocks > 0) other.push(`ブロック${stat.blocks}`)
+      if (stat.turnovers > 0) other.push(`ターンオーバー${stat.turnovers}`)
+      const fouls = (stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0)
+      if (fouls > 0) other.push(`ファウル${fouls}`)
+
+      const head = `#${player.number || '—'} ${player.name}　${pts}得点`
+      const detail = [shoot.join(' '), other.join(' ')].filter(Boolean).join(' / ')
+      return detail ? [head, `　${detail}`] : [head]
+    })
+
     const lines = [
       `🏀 vs ${game.opponent}  ${result}`,
       `${displayScore} - ${game.opponent_score}`,
       ...(qRows.length ? ['', '【クォータースコア】', ...qRows] : []),
       '',
       '【選手スタッツ】',
-      ...rows.filter(({ stat }) => calcPoints(stat) > 0 || stat.rebounds > 0 || stat.assists > 0).map(({ player, stat }) => {
-        const pts = calcPoints(stat)
-        const parts = [`${pts}pts`]
-        if (stat.fg2_made > 0) parts.push(`2P${stat.fg2_made}/${stat.fg2_attempt}`)
-        if (stat.fg3_made > 0) parts.push(`3P${stat.fg3_made}/${stat.fg3_attempt}`)
-        if (stat.ft_made > 0) parts.push(`FT${stat.ft_made}/${stat.ft_attempt}`)
-        if (stat.rebounds > 0) parts.push(`R${stat.rebounds}`)
-        if (stat.assists > 0) parts.push(`A${stat.assists}`)
-        if (stat.steals > 0) parts.push(`S${stat.steals}`)
-        return `#${player.number || '—'} ${player.name}: ${parts.join(' ')}`
-      }),
+      ...playerLines,
       ...(shareToken ? [
         '',
-        '📋 この試合のスコアシートはこちら👇',
+        '📋 スコアシート・詳しいスタッツはこちら👇',
         `${window.location.origin}/share/${shareToken}/${game.id}`,
       ] : []),
     ]
@@ -1622,20 +1635,32 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="sticky top-0 bg-[var(--background)] border-b border-[var(--card-border)] px-4 py-3 flex items-center justify-between">
-        <div>
-          <div className="font-bold text-white text-lg">Q{currentQuarter} スターター</div>
-          <div className="text-xs text-[var(--muted)]">自チーム {selected.length}/5　相手 {selectedOpp.length}/5</div>
-          {confirmError && (
-            <div className="text-red-400 text-xs mt-1 font-medium">{confirmError}</div>
-          )}
+      <div className="sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--card-border)]">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="font-bold text-white text-lg">Q{currentQuarter} スターター</div>
+            <div className="text-xs text-[var(--muted)]">
+              自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>　相手 {selectedOpp.length}/5
+            </div>
+          </div>
+          <button
+            onClick={handleConfirm}
+            className={`text-sm py-2 px-5 rounded-lg font-bold ${selected.length === 5 ? 'btn-primary' : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted)]'}`}
+          >
+            決定
+          </button>
         </div>
-        <button
-          onClick={handleConfirm}
-          className="btn-primary text-sm py-2 px-5"
-        >
-          決定
-        </button>
+        {/* 5人未満は試合を開始できない旨を常時表示 */}
+        {selected.length !== 5 && (
+          <div className="bg-red-500/15 border-t border-red-500/40 px-4 py-2 text-red-300 text-sm font-bold text-center">
+            ⚠️ スターターは5人ちょうど選んでください（あと{Math.max(0, 5 - selected.length)}人）
+          </div>
+        )}
+        {confirmError && selected.length === 5 && (
+          <div className="bg-red-500/15 border-t border-red-500/40 px-4 py-2 text-red-300 text-sm font-bold text-center">
+            {confirmError}
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-4 space-y-5">

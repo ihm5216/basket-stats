@@ -140,6 +140,16 @@ function NewGameForm() {
 
   const [creating, setCreating] = useState(false)
 
+  // 写真読み込み直後の確認リマインダー（写真とメンバー表の不一致が多いため）
+  const [ourPhotoConfirm, setOurPhotoConfirm] = useState(false)
+  const [oppPhotoConfirm, setOppPhotoConfirm] = useState(false)
+
+  // 選択中の自チーム選手の背番号重複を検出
+  const dupNumbers = (() => {
+    const nums = ourPlayers.filter(p => p.selected && p.number.trim()).map(p => p.number.trim())
+    return [...new Set(nums.filter((n, i) => nums.indexOf(n) !== i))]
+  })()
+
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -204,6 +214,7 @@ function NewGameForm() {
     await extractPlayers(file, setOurExtracting, setOurExtractError, setOurTeamName, (extracted) => {
       const newOnes = extracted.filter(p => !existingNums.has(p.number))
       setOurPlayers(prev => [...prev, ...newOnes])
+      if (newOnes.length > 0) setOurPhotoConfirm(true)
     })
   }
 
@@ -211,7 +222,10 @@ function NewGameForm() {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    await extractPlayers(file, setOppExtracting, setOppExtractError, setOppTeamName, setOppPlayers)
+    await extractPlayers(file, setOppExtracting, setOppExtractError, setOppTeamName, (extracted) => {
+      setOppPlayers(extracted)
+      if (extracted.length > 0) setOppPhotoConfirm(true)
+    })
   }
 
   async function handleCreate() {
@@ -406,6 +420,28 @@ function NewGameForm() {
           )}
           {ourExtractError && <p className="text-red-400 text-xs">{ourExtractError}</p>}
 
+          {/* 写真読み込み後の確認リマインダー */}
+          {ourPhotoConfirm && (
+            <div className="bg-yellow-500/10 border-2 border-yellow-500/50 rounded-lg px-3 py-2.5">
+              <p className="text-yellow-300 text-sm font-bold mb-1">⚠️ 読み取り結果を必ず確認してください</p>
+              <p className="text-yellow-200/80 text-xs leading-relaxed mb-2">
+                写真からの自動読み取りは間違うことがあります。下の選手名・背番号がメンバー表と一致しているか確認し、違っていれば直接修正してください。
+              </p>
+              <button
+                onClick={() => setOurPhotoConfirm(false)}
+                className="text-xs font-bold bg-yellow-500/20 text-yellow-300 rounded px-3 py-1.5 active:opacity-70"
+              >✓ 確認しました</button>
+            </div>
+          )}
+
+          {/* 背番号重複の警告 */}
+          {dupNumbers.length > 0 && (
+            <div className="bg-red-500/10 border-2 border-red-500/50 rounded-lg px-3 py-2.5">
+              <p className="text-red-300 text-sm font-bold">🚫 背番号が重複しています（#{dupNumbers.join('、#')}）</p>
+              <p className="text-red-200/80 text-xs mt-1">同じ背番号の選手がいると記録が混ざります。背番号を修正してください。</p>
+            </div>
+          )}
+
           {/* 登録済みメンバーから選ぶ */}
           {registeredPlayers.length > 0 && (() => {
             const alreadyAdded = new Set(ourPlayers.map(op => `${op.number}_${op.name}`))
@@ -444,7 +480,11 @@ function NewGameForm() {
 
           <div className="flex gap-3 mt-2">
             <button onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center">← 戻る</button>
-            <button onClick={() => setStep(3)} className="btn-primary flex-1 justify-center">
+            <button
+              onClick={() => setStep(3)}
+              disabled={dupNumbers.length > 0}
+              className="btn-primary flex-1 justify-center disabled:opacity-40"
+            >
               次へ：相手チーム →
             </button>
           </div>
@@ -477,6 +517,20 @@ function NewGameForm() {
             </div>
           )}
           {oppExtractError && <p className="text-red-400 text-xs">{oppExtractError}</p>}
+
+          {/* 写真読み込み後の確認リマインダー */}
+          {oppPhotoConfirm && (
+            <div className="bg-yellow-500/10 border-2 border-yellow-500/50 rounded-lg px-3 py-2.5">
+              <p className="text-yellow-300 text-sm font-bold mb-1">⚠️ 読み取り結果を必ず確認してください</p>
+              <p className="text-yellow-200/80 text-xs leading-relaxed mb-2">
+                下の選手名・背番号がメンバー表と一致しているか確認し、違っていれば修正してください。
+              </p>
+              <button
+                onClick={() => setOppPhotoConfirm(false)}
+                className="text-xs font-bold bg-yellow-500/20 text-yellow-300 rounded px-3 py-1.5 active:opacity-70"
+              >✓ 確認しました</button>
+            </div>
+          )}
 
           <PlayerEditor players={oppPlayers} onChange={setOppPlayers} />
 

@@ -325,25 +325,28 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
 
   function numCell(key: string, n: number, mark: RunMark | undefined, isQEnd: boolean) {
     const color = qColor(mark?.quarter)
-    const slash = mark && (mark.type === '2P' || mark.type === '3P')
     const filled = mark?.type === 'FT'
-    const inner = filled
-      ? <span style={{ display: 'inline-block', width: '3.2mm', height: '3.2mm', borderRadius: '50%', background: color, verticalAlign: 'middle' }} />
+    const numEl = filled
+      ? <span style={{ display: 'inline-block', width: '2.6mm', height: '2.6mm', borderRadius: '50%', background: color, verticalAlign: 'middle' }} />
       : n
+    let content: React.ReactNode = numEl
+    if (mark) {
+      content = isQEnd
+        // ピリオド終了: 最後の得点を二重枠（太枠）で囲む
+        ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.8mm', height: '3.8mm', border: `0.5mm solid ${color}`, borderRadius: '0.6mm', color, fontWeight: 'bold' }}>{numEl}</span>
+        // 通常の得点: 数字を四角で囲んで見やすく（得点が入った数字＝□）
+        : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.4mm', height: '3.4mm', border: `0.3mm solid ${color}`, borderRadius: '0.5mm', color, fontWeight: 'bold' }}>{numEl}</span>
+    }
     return (
       <td key={key} style={{
         border: BK,
         borderBottom: isQEnd ? THICK : BK,
         textAlign: 'center', fontSize: '2.4mm', height: '4.4mm', position: 'relative',
-        color: '#000',
-        background: slash
-          ? `linear-gradient(to top right, transparent 45%, ${color} 45%, ${color} 55%, transparent 55%)`
-          : undefined,
+        // 得点が入ったマスはクォーター色（第1・第3＝赤）、空マスは薄いグレー
+        color: mark ? color : '#bbb',
+        background: mark ? 'rgba(0,0,0,0.02)' : undefined,
       }}>
-        {isQEnd && mark
-          // ピリオド終了: 最後の得点数字を太い丸で囲む（公式記入ルール）
-          ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.8mm', height: '3.8mm', border: `0.45mm solid ${color}`, borderRadius: '50%', verticalAlign: 'middle' }}>{inner}</span>
-          : inner}
+        {content}
       </td>
     )
   }
@@ -474,7 +477,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
               </tbody>
             </table>
             <div style={{ fontSize: '2mm', color: '#333', marginTop: '0.8mm' }}>
-              2点シュート＝斜線　3点シュート＝番号に○　フリースロー＝●　太線＝ピリオド終了　赤＝第1・第3ピリオド／延長
+              □＝得点（その点数に到達）　左のA/B列＝得点した選手の背番号（3点は○囲み）　フリースロー＝●　太枠＝ピリオド終了　赤＝第1・第3ピリオド／延長
             </div>
           </div>
         </div>
