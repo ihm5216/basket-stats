@@ -234,14 +234,23 @@ function NewGameForm() {
 
     const supabase = createClient()
 
-    // 既存選手のうちチェックされているもののIDを収集（番号で照合）
-    const existingNums = new Set(registeredPlayers.map(p => p.number ?? ''))
-    const selectedExistingIds = registeredPlayers
-      .filter(rp => ourPlayers.some(op => op.selected && op.number === (rp.number ?? '')))
-      .map(p => p.id)
+    // この試合の出場メンバー（スクショ＋手動で選ばれた選手）
+    const selectedOps = ourPlayers.filter(p => p.selected && p.name.trim())
 
-    // 番号が登録済みに存在しない選手のみ新規挿入
-    const newOwn = ourPlayers.filter(p => p.selected && p.name.trim() && !existingNums.has(p.number))
+    // 既存選手との照合は「名前」を主キーにする。
+    // 背番号は日によって別人が同じ番号を使うことがあるため、番号での照合はしない。
+    // → 同じ番号の登録選手が複数いても、今日いる本人（名前一致）だけが使われる。
+    const selectedExistingIds: string[] = []
+    const newOwn: PlayerRow[] = []
+    for (const op of selectedOps) {
+      const byName = registeredPlayers.filter(rp => rp.name.trim() === op.name.trim())
+      let match: Player | undefined
+      if (byName.length === 1) match = byName[0]
+      else if (byName.length > 1) match = byName.find(rp => (rp.number ?? '') === op.number) ?? byName[0]
+      if (match) selectedExistingIds.push(match.id)
+      else newOwn.push(op)  // 名前が一致する登録選手なし → この試合の新メンバーとして登録
+    }
+
     let newInsertedIds: string[] = []
     if (newOwn.length > 0) {
       const { data: inserted } = await supabase.from('players')
@@ -444,26 +453,42 @@ function NewGameForm() {
 
           {/* 登録済みメンバーから選ぶ */}
           {registeredPlayers.length > 0 && (() => {
-            const alreadyAdded = new Set(ourPlayers.map(op => `${op.number}_${op.name}`))
-            const remaining = registeredPlayers.filter(rp => !alreadyAdded.has(`${rp.number ?? ''}_${rp.name}`))
-            return remaining.length > 0 ? (
+            const addedNames = new Set(ourPlayers.map(op => op.name.trim()))
+            // 今日のメンバーが既に使っている背番号 → 同じ番号の登録選手はこの試合では出さない
+            const usedNums = new Set(ourPlayers.filter(p => p.selected && p.number.trim()).map(p => p.number.trim()))
+            const remaining = registeredPlayers.filter(rp => {
+              if (addedNames.has(rp.name.trim())) return false           // 既に今日のメンバーに居る
+              if (rp.number && usedNums.has(rp.number)) return false      // 同じ背番号が今日使われている
+              return true
+            })
+            const hiddenByNum = registeredPlayers.some(rp => !addedNames.has(rp.name.trim()) && rp.number && usedNums.has(rp.number))
+            return (
               <div>
                 <div className="text-xs text-[var(--muted)] mb-2">登録済みメンバーから選ぶ:</div>
-                <div className="flex flex-wrap gap-2">
-                  {remaining.map(rp => (
-                    <button
-                      key={rp.id}
-                      type="button"
-                      onClick={() => setOurPlayers(prev => [...prev, { number: rp.number ?? '', name: rp.name, selected: true }])}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--card-border)] text-sm hover:border-orange-500/60 transition-colors"
-                    >
-                      <span className="text-orange-400 font-bold text-xs">#{rp.number || '—'}</span>
-                      <span className="text-white text-xs">{rp.name}</span>
-                    </button>
-                  ))}
-                </div>
+                {remaining.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {remaining.map(rp => (
+                      <button
+                        key={rp.id}
+                        type="button"
+                        onClick={() => setOurPlayers(prev => [...prev, { number: rp.number ?? '', name: rp.name, selected: true }])}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--card-border)] text-sm hover:border-orange-500/60 transition-colors"
+                      >
+                        <span className="text-orange-400 font-bold text-xs">#{rp.number || '—'}</span>
+                        <span className="text-white text-xs">{rp.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--muted)]">（今日のメンバーで全員そろっています）</p>
+                )}
+                {hiddenByNum && (
+                  <p className="text-[10px] text-[var(--muted)] mt-1.5 leading-relaxed">
+                    ※ 今日のメンバーと同じ背番号の登録選手は、この試合では自動的に除外しています。
+                  </p>
+                )}
               </div>
-            ) : null
+            )
           })()}
 
           {/* 選択済みリスト */}
