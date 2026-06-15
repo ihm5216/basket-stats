@@ -240,10 +240,12 @@ function NewGameForm() {
     // 既存選手との照合は「名前」を主キーにする。
     // 背番号は日によって別人が同じ番号を使うことがあるため、番号での照合はしない。
     // → 同じ番号の登録選手が複数いても、今日いる本人（名前一致）だけが使われる。
+    // 写真読み取りのスペース差（例「福谷叶」「福谷 叶」）を吸収するため空白を無視して比較。
+    const normName = (s: string) => s.replace(/[\s　]/g, '')
     const selectedExistingIds: string[] = []
     const newOwn: PlayerRow[] = []
     for (const op of selectedOps) {
-      const byName = registeredPlayers.filter(rp => rp.name.trim() === op.name.trim())
+      const byName = registeredPlayers.filter(rp => normName(rp.name) === normName(op.name))
       let match: Player | undefined
       if (byName.length === 1) match = byName[0]
       else if (byName.length > 1) match = byName.find(rp => (rp.number ?? '') === op.number) ?? byName[0]

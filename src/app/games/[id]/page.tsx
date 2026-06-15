@@ -641,7 +641,7 @@ function foulLabel(t: keyof OppFoulData): string {
   return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
@@ -650,6 +650,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   onAddEvent?: (req: AddEventRequest) => void
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
+  onRenamePlayer?: (playerId: string, newName: string) => void
   homeTimeoutRecords?: TimeoutRecord[]
   oppTimeoutRecords?: TimeoutRecord[]
   foulEvents?: FoulEvent[]
@@ -659,6 +660,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const curQ = game.is_finished ? 99 : (currentQuarter ?? game.quarter ?? 1)
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [changeSel, setChangeSel] = useState('')  // 選手変更ダイアログの選択値
+  const [renameTarget, setRenameTarget] = useState<{playerId: string; name: string} | null>(null)  // 選手名の修正
   const [addDialog, setAddDialog] = useState(false)
   const [addTeam, setAddTeam] = useState<'us'|'opponent'>('us')
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
@@ -901,8 +903,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               return (
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
-                  <td style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap'}}>
-                    {p.name}
+                  <td
+                    onClick={isHome && onRenamePlayer ? () => setRenameTarget({ playerId: p.id, name: p.name }) : undefined}
+                    style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: isHome && onRenamePlayer ? 'pointer' : 'default', background: isHome && onRenamePlayer ? 'rgba(14,165,233,0.05)' : undefined}}
+                  >
+                    {p.name}{isHome && onRenamePlayer && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
                   </td>
                   <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
                   {Array.from({length: maxQInSheet}, (_, qi) => {
@@ -1303,12 +1308,35 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
           </div>
         </div>
       )}
+
+      {/* 選手名の修正ダイアログ */}
+      {renameTarget && onRenamePlayer && (
+        <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:202, padding:16}} onClick={() => setRenameTarget(null)}>
+          <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:340, width:'100%'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontWeight:'bold', fontSize:15, marginBottom:4, textAlign:'center'}}>選手名を修正</div>
+            <div style={{fontSize:11, color:'#888', marginBottom:14, textAlign:'center'}}>この名前はチーム名簿にも反映されます</div>
+            <input
+              autoFocus
+              value={renameTarget.name}
+              onChange={e => setRenameTarget({ ...renameTarget, name: e.target.value })}
+              style={{width:'100%', padding:'10px', borderRadius:8, border:'1px solid #ccc', fontSize:16, marginBottom:16, boxSizing:'border-box', color:'#111'}}
+            />
+            <div style={{display:'flex', gap:8}}>
+              <button onClick={() => setRenameTarget(null)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:14}}>キャンセル</button>
+              <button
+                onClick={() => { const n = renameTarget.name.trim(); if (n) onRenamePlayer(renameTarget.playerId, n); setRenameTarget(null) }}
+                style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#0ea5e9', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:14}}
+              >保存する</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── 試合終了後スタッツ一覧 ──────────────────────────────────────────────────
-function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit }: {
+function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer }: {
   game: Game
   players: Player[]
   statsMap: Map<string, PlayerStat>
@@ -1318,6 +1346,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onAddEvent?: (req: AddEventRequest) => void
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
+  onRenamePlayer?: (playerId: string, newName: string) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
   // LINE共有用: チームの共有トークンを取得
@@ -1544,6 +1573,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             onAddEvent={onAddEvent}
             onChangeEventPlayer={onChangeEventPlayer}
             onFoulEdit={onFoulEdit}
+            onRenamePlayer={onRenamePlayer}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
             foulEvents={finishedFoulEvents}
@@ -2185,6 +2215,17 @@ export default function GamePage() {
     }
   }
 
+  // スコアシートから選手名を修正する（チーム名簿の players レコードも更新）
+  async function handleRenamePlayer(playerId: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, name: trimmed } : p))
+    try {
+      const supabase = createClient()
+      await supabase.from('players').update({ name: trimmed }).eq('id', playerId)
+    } catch { /* オフライン時もローカルには反映済み */ }
+  }
+
   // スコアシートから「得点した選手」を付け替える（スタッツも旧選手→新選手へ移動）
   function handleChangeEventPlayer(idx: number, ev: ScoreEvent, newId: string) {
     if (ev.team === 'us') {
@@ -2676,7 +2717,7 @@ export default function GamePage() {
   if (!game) return null
 
   if (game.is_finished) {
-    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} />
+    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} onRenamePlayer={handleRenamePlayer} />
   }
 
   if (courtSetupMode) {
@@ -2905,6 +2946,7 @@ export default function GamePage() {
             onAddEvent={handleAddScoreEvent}
             onChangeEventPlayer={handleChangeEventPlayer}
             onFoulEdit={handleFoulEdit}
+            onRenamePlayer={handleRenamePlayer}
             foulEvents={foulEvents}
             currentQuarter={currentQuarter}
             homeTimeoutRecords={homeTimeoutRecords}
