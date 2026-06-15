@@ -313,46 +313,20 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
     )
   }
 
-  // ── 部品: ランニングスコアのセル中身 ──
-  function scorerCell(mark: RunMark | undefined) {
+  // ── 部品: ランニングスコアのマス中身（記録画面と同じ見せ方） ──
+  // 2点=背番号　3点=背番号を○で囲む　フリースロー=●＋背番号
+  function markContent(mark: RunMark | undefined): React.ReactNode {
     if (!mark) return null
     const color = qColor(mark.quarter)
-    if (mark.type === '3P') {
-      return <span style={{ display: 'inline-block', minWidth: '3.4mm', height: '3.4mm', border: `0.3mm solid ${color}`, borderRadius: '50%', fontSize: '2.4mm', lineHeight: '3.2mm', color, fontWeight: 'bold' }}>{mark.num}</span>
-    }
-    return <span style={{ fontSize: '2.6mm', color, fontWeight: 'bold' }}>{mark.num}</span>
+    const num = mark.num || '—'
+    if (mark.type === 'FT') return <span style={{ color, fontWeight: 'bold', fontSize: '2.4mm' }}>●{num}</span>
+    if (mark.type === '2P') return <span style={{ color, fontWeight: 'bold', fontSize: '2.7mm' }}>{num}</span>
+    // 3P
+    return <span style={{ display: 'inline-block', minWidth: '3.2mm', height: '3.2mm', border: `0.3mm solid ${color}`, borderRadius: '50%', fontSize: '2.2mm', lineHeight: '3mm', color, fontWeight: 'bold' }}>{num}</span>
   }
 
-  function numCell(key: string, n: number, mark: RunMark | undefined, isQEnd: boolean) {
-    const color = qColor(mark?.quarter)
-    const filled = mark?.type === 'FT'
-    const numEl = filled
-      ? <span style={{ display: 'inline-block', width: '2.6mm', height: '2.6mm', borderRadius: '50%', background: color, verticalAlign: 'middle' }} />
-      : n
-    let content: React.ReactNode = numEl
-    if (mark) {
-      content = isQEnd
-        // ピリオド終了: 最後の得点を二重枠（太枠）で囲む
-        ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.8mm', height: '3.8mm', border: `0.5mm solid ${color}`, borderRadius: '0.6mm', color, fontWeight: 'bold' }}>{numEl}</span>
-        // 通常の得点: 数字を四角で囲んで見やすく（得点が入った数字＝□）
-        : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '3.4mm', height: '3.4mm', border: `0.3mm solid ${color}`, borderRadius: '0.5mm', color, fontWeight: 'bold' }}>{numEl}</span>
-    }
-    return (
-      <td key={key} style={{
-        border: BK,
-        borderBottom: isQEnd ? THICK : BK,
-        textAlign: 'center', fontSize: '2.4mm', height: '4.4mm', position: 'relative',
-        // 得点が入ったマスはクォーター色（第1・第3＝赤）、空マスは薄いグレー
-        color: mark ? color : '#bbb',
-        background: mark ? 'rgba(0,0,0,0.02)' : undefined,
-      }}>
-        {content}
-      </td>
-    )
-  }
-
-  // ランニングスコア: 4列グループ × 40行 = 1〜160
-  const groups = [0, 1, 2, 3]
+  // ランニングスコア: 3列グループ × 40行 = 1〜120（記録画面と同じ構成）
+  const groups = [0, 1, 2]
 
   return (
     <div id="jba-print-sheet">
@@ -441,18 +415,15 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
             <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
               <colgroup>
                 {groups.flatMap(g => [
-                  <col key={`a${g}`} style={{ width: '6mm' }} />,
-                  <col key={`an${g}`} style={{ width: '4.8mm' }} />,
-                  <col key={`bn${g}`} style={{ width: '4.8mm' }} />,
-                  <col key={`b${g}`} style={{ width: '6mm' }} />,
+                  <col key={`a${g}`} style={{ width: `${100 / 6}%` }} />,
+                  <col key={`b${g}`} style={{ width: `${100 / 6}%` }} />,
                 ])}
               </colgroup>
               <thead>
                 <tr style={{ height: '4mm' }}>
                   {groups.flatMap(g => [
                     <th key={`a${g}`} style={{ border: BK, fontSize: '2.4mm' }}>A</th>,
-                    <th key={`n${g}`} colSpan={2} style={{ border: BK, fontSize: '2.2mm', fontWeight: 'normal' }}>得点</th>,
-                    <th key={`b${g}`} style={{ border: BK, borderRight: g < 3 ? THICK : BK, fontSize: '2.4mm' }}>B</th>,
+                    <th key={`b${g}`} style={{ border: BK, borderRight: g < 2 ? THICK : BK, fontSize: '2.4mm' }}>B</th>,
                   ])}
                 </tr>
               </thead>
@@ -465,11 +436,16 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
                       const bM = bMarks.get(n)
                       const aEnd = aQEnds.has(n)
                       const bEnd = bQEnds.has(n)
+                      const cornerNum = (
+                        <span style={{ position: 'absolute', top: 0, left: '0.3mm', fontSize: '1.5mm', color: '#bbb', lineHeight: 1 }}>{n}</span>
+                      )
                       return [
-                        <td key={`a${n}`} style={{ border: BK, borderBottom: aEnd ? THICK : BK, textAlign: 'center', height: '4.4mm' }}>{scorerCell(aM)}</td>,
-                        numCell(`an${n}`, n, aM, aEnd),
-                        numCell(`bn${n}`, n, bM, bEnd),
-                        <td key={`b${n}`} style={{ border: BK, borderBottom: bEnd ? THICK : BK, borderRight: g < 3 ? THICK : BK, textAlign: 'center', height: '4.4mm' }}>{scorerCell(bM)}</td>,
+                        <td key={`a${n}`} style={{ border: BK, borderBottom: aEnd ? THICK : BK, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: aM ? 'rgba(0,0,0,0.03)' : undefined }}>
+                          {cornerNum}{markContent(aM)}
+                        </td>,
+                        <td key={`b${n}`} style={{ border: BK, borderBottom: bEnd ? THICK : BK, borderRight: g < 2 ? THICK : BK, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: bM ? 'rgba(0,0,0,0.03)' : undefined }}>
+                          {cornerNum}{markContent(bM)}
+                        </td>,
                       ]
                     })}
                   </tr>
@@ -477,7 +453,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
               </tbody>
             </table>
             <div style={{ fontSize: '2mm', color: '#333', marginTop: '0.8mm' }}>
-              □＝得点（その点数に到達）　左のA/B列＝得点した選手の背番号（3点は○囲み）　フリースロー＝●　太枠＝ピリオド終了　赤＝第1・第3ピリオド／延長
+              各マスの小さい数字＝累計得点　A=自チーム / B=相手　中の数字＝得点した選手の背番号　2点=数字　3点=○囲み　フリースロー＝●　太線＝ピリオド終了　赤＝第1・第3ピリオド／延長
             </div>
           </div>
         </div>
