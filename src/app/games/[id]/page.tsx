@@ -641,7 +641,7 @@ function foulLabel(t: keyof OppFoulData): string {
   return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
@@ -651,6 +651,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
   onRenamePlayer?: (playerId: string, newName: string) => void
+  onRenameOppPlayer?: (oppKey: string, newName: string) => void
   homeTimeoutRecords?: TimeoutRecord[]
   oppTimeoutRecords?: TimeoutRecord[]
   foulEvents?: FoulEvent[]
@@ -660,7 +661,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const curQ = game.is_finished ? 99 : (currentQuarter ?? game.quarter ?? 1)
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [changeSel, setChangeSel] = useState('')  // 選手変更ダイアログの選択値
-  const [renameTarget, setRenameTarget] = useState<{playerId: string; name: string} | null>(null)  // 選手名の修正
+  const [renameTarget, setRenameTarget] = useState<{playerId: string; name: string; isHome: boolean} | null>(null)  // 選手名の修正
   const [addDialog, setAddDialog] = useState(false)
   const [addTeam, setAddTeam] = useState<'us'|'opponent'>('us')
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
@@ -903,12 +904,17 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               return (
                 <tr key={p.id} style={{height:14}}>
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
+                  {(() => {
+                    const canRename = isHome ? !!onRenamePlayer : !!onRenameOppPlayer
+                    return (
                   <td
-                    onClick={isHome && onRenamePlayer ? () => setRenameTarget({ playerId: p.id, name: p.name }) : undefined}
-                    style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: isHome && onRenamePlayer ? 'pointer' : 'default', background: isHome && onRenamePlayer ? 'rgba(14,165,233,0.05)' : undefined}}
+                    onClick={canRename ? () => setRenameTarget({ playerId: p.id, name: p.name, isHome }) : undefined}
+                    style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
                   >
-                    {p.name}{isHome && onRenamePlayer && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
+                    {p.name}{canRename && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
                   </td>
+                    )
+                  })()}
                   <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
                   {Array.from({length: maxQInSheet}, (_, qi) => {
                     const q = qi + 1
@@ -1310,11 +1316,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
       )}
 
       {/* 選手名の修正ダイアログ */}
-      {renameTarget && onRenamePlayer && (
+      {renameTarget && (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:202, padding:16}} onClick={() => setRenameTarget(null)}>
           <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:340, width:'100%'}} onClick={e => e.stopPropagation()}>
-            <div style={{fontWeight:'bold', fontSize:15, marginBottom:4, textAlign:'center'}}>選手名を修正</div>
-            <div style={{fontSize:11, color:'#888', marginBottom:14, textAlign:'center'}}>この名前はチーム名簿にも反映されます</div>
+            <div style={{fontWeight:'bold', fontSize:15, marginBottom:4, textAlign:'center'}}>{renameTarget.isHome ? '選手名を修正' : '相手選手名を修正'}</div>
+            <div style={{fontSize:11, color:'#888', marginBottom:14, textAlign:'center'}}>{renameTarget.isHome ? 'この名前はチーム名簿にも反映されます' : 'この試合の相手選手名を変更します'}</div>
             <input
               autoFocus
               value={renameTarget.name}
@@ -1324,7 +1330,11 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <div style={{display:'flex', gap:8}}>
               <button onClick={() => setRenameTarget(null)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:14}}>キャンセル</button>
               <button
-                onClick={() => { const n = renameTarget.name.trim(); if (n) onRenamePlayer(renameTarget.playerId, n); setRenameTarget(null) }}
+                onClick={() => {
+                  const n = renameTarget.name.trim()
+                  if (n) { if (renameTarget.isHome) onRenamePlayer?.(renameTarget.playerId, n); else onRenameOppPlayer?.(renameTarget.playerId, n) }
+                  setRenameTarget(null)
+                }}
                 style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#0ea5e9', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:14}}
               >保存する</button>
             </div>
@@ -1336,7 +1346,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 }
 
 // ─── 試合終了後スタッツ一覧 ──────────────────────────────────────────────────
-function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer }: {
+function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer }: {
   game: Game
   players: Player[]
   statsMap: Map<string, PlayerStat>
@@ -1347,6 +1357,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
   onRenamePlayer?: (playerId: string, newName: string) => void
+  onRenameOppPlayer?: (oppKey: string, newName: string) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
   // LINE共有用: チームの共有トークンを取得
@@ -1577,6 +1588,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             onChangeEventPlayer={onChangeEventPlayer}
             onFoulEdit={onFoulEdit}
             onRenamePlayer={onRenamePlayer}
+            onRenameOppPlayer={onRenameOppPlayer}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
             foulEvents={finishedFoulEvents}
@@ -2240,6 +2252,57 @@ export default function GamePage() {
     } catch { /* オフライン時もローカルには反映済み */ }
   }
 
+  // 相手チームの選手名を修正する。相手選手のkeyは `opp_番号_名前` 由来のため、
+  // 改名時は全参照（ファウル・出場・永続化）を旧key→新keyへ移行する。
+  function handleRenameOppPlayer(oldKey: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    const target = oppPlayerList.find(p => p.key === oldKey)
+    if (!target || target.name === trimmed) return
+    const newKey = `opp_${target.number}_${trimmed}`
+
+    setOppPlayerList(prev => prev.map(p => p.key === oldKey ? { ...p, key: newKey, name: trimmed } : p))
+    setOpponentPlayerKeys(prev => {
+      const next = new Set(prev)
+      next.delete(`${target.number}_${target.name}`)
+      next.add(`${target.number}_${trimmed}`)
+      return next
+    })
+    setFoulEvents(prev => prev.map(e => e.team === 'opponent' && e.key === oldKey ? { ...e, key: newKey } : e))
+    setOppFoulsMap(prev => {
+      if (!(oldKey in prev)) return prev
+      const next: Record<string, OppFoulData> = {}
+      for (const [k, v] of Object.entries(prev)) next[k === oldKey ? newKey : k] = v
+      return next
+    })
+    // localStorage 群の key を移行
+    try {
+      const ovRaw = localStorage.getItem(`scoresheet_ov_${id}`)
+      if (ovRaw) {
+        const ov = JSON.parse(ovRaw)
+        if (ov.oppPlayers && ov.oppPlayers[oldKey] !== undefined) {
+          ov.oppPlayers[newKey] = ov.oppPlayers[oldKey]; delete ov.oppPlayers[oldKey]
+          localStorage.setItem(`scoresheet_ov_${id}`, JSON.stringify(ov))
+        }
+      }
+    } catch { /* ignore */ }
+    for (let q = 1; q <= 10; q++) {
+      for (const lsKey of [`court_opp_q${q}_${id}`, `sub_opp_q${q}_${id}`]) {
+        try {
+          const raw = localStorage.getItem(lsKey)
+          if (raw) {
+            const arr = JSON.parse(raw) as string[]
+            if (arr.includes(oldKey)) localStorage.setItem(lsKey, JSON.stringify(arr.map(k => k === oldKey ? newKey : k)))
+          }
+        } catch { /* ignore */ }
+      }
+    }
+    // 相手選手リストを永続化（名前更新）
+    const updatedList = oppPlayerList.map(p => ({ number: p.number, name: p.key === oldKey ? trimmed : p.name }))
+    localStorage.setItem(`game_${id}_opponent_players`, JSON.stringify(updatedList))
+    try { createClient().from('games').update({ opponent_players: updatedList }).eq('id', id) } catch { /* ignore */ }
+  }
+
   // スコアシートから「得点した選手」を付け替える（スタッツも旧選手→新選手へ移動）
   function handleChangeEventPlayer(idx: number, ev: ScoreEvent, newId: string) {
     if (ev.team === 'us') {
@@ -2731,7 +2794,7 @@ export default function GamePage() {
   if (!game) return null
 
   if (game.is_finished) {
-    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} onRenamePlayer={handleRenamePlayer} />
+    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} onRenamePlayer={handleRenamePlayer} onRenameOppPlayer={handleRenameOppPlayer} />
   }
 
   if (courtSetupMode) {
@@ -2961,6 +3024,7 @@ export default function GamePage() {
             onChangeEventPlayer={handleChangeEventPlayer}
             onFoulEdit={handleFoulEdit}
             onRenamePlayer={handleRenamePlayer}
+            onRenameOppPlayer={handleRenameOppPlayer}
             foulEvents={foulEvents}
             currentQuarter={currentQuarter}
             homeTimeoutRecords={homeTimeoutRecords}
@@ -3208,22 +3272,23 @@ export default function GamePage() {
             >
               ↩ 取り消し{canUndo ? ` (${undoCount})` : ''}
             </button>
+            {/* Q4以降は「試合終了」を大きく中央寄りに、OTを右端に小さく配置 */}
             {!game.is_finished && (
-              <button onClick={advanceQuarter} className="btn-secondary flex-1 text-sm py-2.5">
+              <button
+                onClick={finishGame}
+                className={`btn-secondary text-sm py-2.5 text-red-400 border-red-400/30 ${currentQuarter >= 4 ? 'flex-1' : 'px-4'}`}
+              >
+                試合終了
+              </button>
+            )}
+            {!game.is_finished && (
+              <button onClick={advanceQuarter} className={`btn-secondary text-sm py-2.5 ${currentQuarter >= 4 ? 'px-4' : 'flex-1'}`}>
                 {currentQuarter < 4
                   ? `Q${currentQuarter + 1}へ →`
                   : currentQuarter === 4
                   ? 'OTへ →'
                   : `OT${currentQuarter - 3}へ →`
                 }
-              </button>
-            )}
-            {!game.is_finished && (
-              <button
-                onClick={finishGame}
-                className={`btn-secondary text-sm py-2.5 text-red-400 border-red-400/30 ${currentQuarter >= 4 && pending.length === 0 ? 'flex-1' : 'px-4'}`}
-              >
-                試合終了
               </button>
             )}
           </div>
