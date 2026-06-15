@@ -253,11 +253,11 @@ export default function TeamPage() {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <div className="text-sm font-semibold text-white">📷 写真から一括登録</div>
-                  <div className="text-xs text-[var(--muted)] mt-0.5">公式記録用紙の写真を撮って選手を自動登録</div>
+                  <div className="text-xs text-[var(--muted)] mt-0.5">公式記録用紙の写真を撮影 or アルバムから選んで自動登録</div>
                 </div>
                 <label className={`btn-primary text-sm py-2 px-4 cursor-pointer ${extracting ? 'opacity-50 pointer-events-none' : ''}`}>
                   {extracting ? '処理中...' : '写真を選択'}
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} disabled={extracting} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={extracting} />
                 </label>
               </div>
               {extracting && extractProgress && (

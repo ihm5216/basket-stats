@@ -419,8 +419,9 @@ function NewGameForm() {
           <div className="flex items-center gap-3 flex-wrap">
             <label className={`btn-primary text-sm py-2 px-4 cursor-pointer inline-flex items-center gap-1.5 ${ourExtracting ? 'opacity-50 pointer-events-none' : ''}`}>
               📷 {ourExtracting ? '読み取り中...' : '写真から読み込む'}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOurPhoto} disabled={ourExtracting} />
+              <input type="file" accept="image/*" className="hidden" onChange={handleOurPhoto} disabled={ourExtracting} />
             </label>
+            <span className="text-[10px] text-[var(--muted)]">撮影・アルバムどちらでもOK</span>
           </div>
 
           {ourTeamName && (
@@ -533,7 +534,7 @@ function NewGameForm() {
             <span className="text-sm text-[var(--muted)]">写真から登録:</span>
             <label className={`btn-secondary text-sm py-2 px-3 cursor-pointer inline-flex items-center gap-1.5 ${oppExtracting ? 'opacity-50 pointer-events-none' : ''}`}>
               📷 {oppExtracting ? '読み取り中...' : '写真を選択'}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleOppPhoto} disabled={oppExtracting} />
+              <input type="file" accept="image/*" className="hidden" onChange={handleOppPhoto} disabled={oppExtracting} />
             </label>
           </div>
 
