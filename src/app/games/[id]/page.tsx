@@ -210,7 +210,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
   // 各Qのスターター (court_q${q}_${gameId} から読み込み)
   const qStarters = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`court_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -220,7 +220,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
   // 相手チームの各Qのスターター
   const qOppStarters = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`court_opp_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -678,7 +678,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   const qHomeStarters = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`court_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -687,7 +687,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   const qOppStarters = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`court_opp_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -696,7 +696,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   const qHomeSubs = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`sub_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -705,7 +705,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   const qOppSubs = useMemo(() => {
     const map = new Map<number, Set<string>>()
-    for (let q = 1; q <= 4; q++) {
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
       const s = localStorage.getItem(`sub_opp_q${q}_${gameId}`)
       if (s) try { map.set(q, new Set(JSON.parse(s))) } catch { /* ignore */ }
     }
@@ -1394,10 +1394,13 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 
   function buildShareText() {
     const result = displayScore > game.opponent_score ? '勝利🎉' : displayScore < game.opponent_score ? '敗北' : '引き分け'
-    const qRows = [1,2,3,4].map(q => {
+    // OT（延長）も含めて全ピリオドのスコアを出す
+    const maxQ = Math.max(4, ...scoreEvents.map(e => e.quarter))
+    const qRows = Array.from({ length: maxQ }, (_, i) => i + 1).map(q => {
       const us  = scoreEvents.filter(e => e.quarter === q && e.team === 'us').reduce((s,e) => s+e.points, 0)
       const opp = scoreEvents.filter(e => e.quarter === q && e.team === 'opponent').reduce((s,e) => s+e.points, 0)
-      return us > 0 || opp > 0 ? `  Q${q}: 自${us} - 相${opp}` : null
+      const label = q <= 4 ? `Q${q}` : `OT${q - 4}`
+      return us > 0 || opp > 0 ? `  ${label}: 自${us} - 相${opp}` : null
     }).filter(Boolean)
 
     // 出場した選手（スタッツ記録がある選手）は全員記載する
@@ -1668,7 +1671,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
       <div className="sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--card-border)]">
         <div className="px-4 py-3 flex items-center justify-between">
           <div>
-            <div className="font-bold text-white text-lg">Q{currentQuarter} スターター</div>
+            <div className="font-bold text-white text-lg">{currentQuarter <= 4 ? `Q${currentQuarter}` : `OT${currentQuarter - 4}`} スターター</div>
             <div className="text-xs text-[var(--muted)]">
               自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>　相手 {selectedOpp.length}/5
             </div>
@@ -2010,7 +2013,7 @@ export default function GamePage() {
         // ファウルイベントの復元（localStorage優先）
         if (!localStorage.getItem(`foul_events_${id}`) && cd.foulEvents?.length)
           localStorage.setItem(`foul_events_${id}`, JSON.stringify(cd.foulEvents))
-        for (let q = 1; q <= 4; q++) {
+        for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
           const qs = String(q)
           if (!localStorage.getItem(`court_q${q}_${id}`) && cd.homeStarters?.[qs]?.length)
             localStorage.setItem(`court_q${q}_${id}`, JSON.stringify(cd.homeStarters[qs]))
@@ -2534,7 +2537,7 @@ export default function GamePage() {
         const oppStarters: Record<string, string[]> = {}
         const homeSubs: Record<string, string[]> = {}
         const oppSubs: Record<string, string[]> = {}
-        for (let q = 1; q <= 4; q++) {
+        for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
           try {
             const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
             const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
@@ -2656,7 +2659,7 @@ export default function GamePage() {
       const oppStarters: Record<string, string[]> = {}
       const homeSubs: Record<string, string[]> = {}
       const oppSubs: Record<string, string[]> = {}
-      for (let q = 1; q <= 4; q++) {
+      for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
         try {
           const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
           const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
