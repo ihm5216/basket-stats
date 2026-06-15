@@ -1634,6 +1634,13 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
       setConfirmError(`背番号が重複しています：${dupNames}。選手登録を確認してください。`)
       return
     }
+    // 相手チームのスターターも選ぶよう促す（相手を登録している場合）
+    // 相手選手が5人未満しか登録されていない場合は登録人数ぶんでOK
+    const oppNeeded = Math.min(5, oppPlayers.length)
+    if (oppPlayers.length > 0 && selectedOpp.length < oppNeeded) {
+      setConfirmError(`相手チームのスターターを${oppNeeded}人選んでください（現在${selectedOpp.length}人）`)
+      return
+    }
     setConfirmError('')
     onConfirm(selected, selectedOpp)
   }
@@ -1673,7 +1680,11 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
           <div>
             <div className="font-bold text-white text-lg">{currentQuarter <= 4 ? `Q${currentQuarter}` : `OT${currentQuarter - 4}`} スターター</div>
             <div className="text-xs text-[var(--muted)]">
-              自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>　相手 {selectedOpp.length}/5
+              自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>
+              {oppPlayers.length > 0 && (() => {
+                const oppNeeded = Math.min(5, oppPlayers.length)
+                return <>　相手 <span className={selectedOpp.length >= oppNeeded ? 'text-green-400 font-bold' : 'text-blue-400 font-bold'}>{selectedOpp.length}/{oppNeeded}</span></>
+              })()}
             </div>
           </div>
           <button
