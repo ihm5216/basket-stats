@@ -33,20 +33,21 @@ type TimeoutRecord = { quarter: number; minute: number }
 // ファウル発生イベント（スコアシートのQ別チームファウル・前後半区切り線用）
 type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: keyof OppFoulData }
 
+// 成功=緑、失敗=赤、その他=黒(neutral)。成功・失敗をそれぞれまとめて配置。
+// テクニカルファウルは「ファウル」ボタンのダイアログ内に統合してすっきりさせる。
 const STAT_BUTTONS: { label: string; key: StatKey; delta: number; category: 'made' | 'missed' | 'neutral' }[] = [
   { label: '2P 成功', key: 'fg2_made', delta: 1, category: 'made' },
-  { label: '2P 失敗', key: 'fg2_attempt', delta: 1, category: 'missed' },
   { label: '3P 成功', key: 'fg3_made', delta: 1, category: 'made' },
-  { label: '3P 失敗', key: 'fg3_attempt', delta: 1, category: 'missed' },
   { label: 'FT 成功', key: 'ft_made', delta: 1, category: 'made' },
+  { label: '2P 失敗', key: 'fg2_attempt', delta: 1, category: 'missed' },
+  { label: '3P 失敗', key: 'fg3_attempt', delta: 1, category: 'missed' },
   { label: 'FT 失敗', key: 'ft_attempt', delta: 1, category: 'missed' },
   { label: 'リバウンド', key: 'rebounds', delta: 1, category: 'neutral' },
   { label: 'アシスト', key: 'assists', delta: 1, category: 'neutral' },
   { label: 'スティール', key: 'steals', delta: 1, category: 'neutral' },
   { label: 'ブロック', key: 'blocks', delta: 1, category: 'neutral' },
-  { label: 'ターンオーバー', key: 'turnovers', delta: 1, category: 'missed' },
-  { label: 'ファウル', key: 'fouls_plain', delta: 1, category: 'missed' },
-  { label: 'テクニカルファウル', key: 'technical_fouls', delta: 1, category: 'missed' },
+  { label: 'ターンオーバー', key: 'turnovers', delta: 1, category: 'neutral' },
+  { label: 'ファウル', key: 'fouls_plain', delta: 1, category: 'neutral' },
 ]
 
 // スコアイベント連鎖の our_score_after / opponent_score_after を再計算（0始まり専用 — 新規セッション時のみ使用）
@@ -906,16 +907,24 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   <td style={{border:B, textAlign:'center', fontSize:6, color:'#888'}}>{i+1}</td>
                   {(() => {
                     const canRename = isHome ? !!onRenamePlayer : !!onRenameOppPlayer
+                    const openEdit = canRename ? () => setRenameTarget({ playerId: p.id, name: p.name, number: p.number, isHome }) : undefined
                     return (
-                  <td
-                    onClick={canRename ? () => setRenameTarget({ playerId: p.id, name: p.name, number: p.number, isHome }) : undefined}
-                    style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
-                  >
-                    {p.name}{canRename && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
-                  </td>
+                    <>
+                      <td
+                        onClick={openEdit}
+                        style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
+                      >
+                        {p.name}{canRename && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
+                      </td>
+                      <td
+                        onClick={openEdit}
+                        style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9, cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
+                      >
+                        {p.number}
+                      </td>
+                    </>
                     )
                   })()}
-                  <td style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9}}>{p.number}</td>
                   {Array.from({length: maxQInSheet}, (_, qi) => {
                     const q = qi + 1
                     const isStarter = starters.get(q)?.has(p.id)
@@ -1342,6 +1351,19 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                 />
               </div>
             </div>
+            {/* 背番号重複の警告（同じ番号だとランニングスコアで記録が混ざる） */}
+            {(() => {
+              const num = renameTarget.number.trim()
+              if (!num) return null
+              const dup = renameTarget.isHome
+                ? players.some(p => p.id !== renameTarget.playerId && (p.number ?? '') === num)
+                : oppPlayerList.some(p => p.key !== renameTarget.playerId && p.number === num)
+              return dup ? (
+                <div style={{background:'#fff1f0', border:'1px solid #f5a3a3', borderRadius:8, padding:'8px 10px', marginBottom:14, fontSize:11, color:'#c00'}}>
+                  ⚠️ 背番号 #{num} は他の選手と重複しています。同じ番号があるとランニングスコアで記録が混ざるため、番号は重複しないようにしてください。
+                </div>
+              ) : null
+            })()}
             <div style={{display:'flex', gap:8}}>
               <button onClick={() => setRenameTarget(null)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:14}}>キャンセル</button>
               <button
@@ -2109,7 +2131,8 @@ export default function GamePage() {
   }
 
   function recordFoulWithFT(playerId: string, ftCount: number) {
-    const foulKey: StatKey = ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
+    // ftCount: -1=テクニカル(T), 0=なし(P), 1=1本(P1), 2=2本(P2), 3=3本(P3)
+    const foulKey: StatKey = ftCount === -1 ? 'technical_fouls' : ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
     const gid = ++gidRef.current
     // 5ファウルアウト検出（このファウルを加えた後の合計で判定）
     const currentStat = getEffectiveStat(playerId)
@@ -2134,21 +2157,8 @@ export default function GamePage() {
       return
     }
 
-    // テクニカルファウルは直接記録（FTなし）
-    if (btn.key === 'technical_fouls') {
-      const gid = ++gidRef.current
-      const currentStat = getEffectiveStat(selectedPlayer.id)
-      const newTotal = getTotalFouls(currentStat) + 1
-      if (newTotal >= 5) setFoulOutAlert({ playerName: selectedPlayer.name, playerNumber: selectedPlayer.number })
-      setPending(prev => [...prev, { playerId: selectedPlayer.id, key: 'technical_fouls', delta: 1, gid }])
-      setTeamFouls(prev => prev + 1)
-      pushFoulEvent('us', selectedPlayer.id, 'technical_fouls')
-      setSelectedPlayer(null)
-      return
-    }
-
-    // 通常のファウルボタンはダイアログを開く
-    if (['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft'].includes(btn.key)) {
+    // ファウルボタンはダイアログを開く（テクニカルもこの中で選ぶ）
+    if (['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(btn.key)) {
       setFoulDialog({ isOpen: true, playerId: selectedPlayer.id })
       return
     }
@@ -3477,8 +3487,14 @@ export default function GamePage() {
               </button>
             </div>
             <button
+              onClick={() => recordFoulWithFT(foulDialog.playerId!, -1)}
+              className="w-full mt-3 bg-orange-600/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+            >
+              テクニカルファウル（T）
+            </button>
+            <button
               onClick={() => setFoulDialog({ isOpen: false })}
-              className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all"
+              className="w-full mt-3 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all"
             >
               キャンセル
             </button>
