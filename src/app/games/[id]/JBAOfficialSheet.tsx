@@ -40,6 +40,9 @@ type CourtData = {
 
 const BK = '0.15mm solid #000'
 const THICK = '0.5mm solid #000'
+// ランニングスコアのマス線。0.15mm は画面（LINE共有）だと細すぎてサブピクセルで
+// 消えてしまい「グレーの帯」に見えるため、画面でも各マスが四角く見える太さにする。
+const RUN_B = '0.3mm solid #888'
 const RED = '#c00000'
 
 function qColor(q?: number) {
@@ -278,7 +281,7 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
               return (
                 <tr key={i} style={{ height: '4.6mm' }}>
                   <td style={{ border: BK }} />
-                  <td style={{ border: BK, fontSize: '2.6mm', paddingLeft: '1mm', overflow: 'hidden', whiteSpace: 'nowrap' }}>{p?.name ?? ''}</td>
+                  <td style={{ border: BK, fontSize: '2.6mm', textAlign: 'center', padding: '0 1mm', overflow: 'hidden', whiteSpace: 'nowrap' }}>{p?.name ?? ''}</td>
                   <td style={{ border: BK, textAlign: 'center', fontSize: '2.8mm', fontWeight: 'bold' }}>{p?.number ?? ''}</td>
                   <td style={{ border: BK, textAlign: 'center', fontSize: '2.8mm' }}>
                     {isStarter
@@ -422,8 +425,8 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
               <thead>
                 <tr style={{ height: '4mm' }}>
                   {groups.flatMap(g => [
-                    <th key={`a${g}`} style={{ border: BK, fontSize: '2.4mm' }}>A</th>,
-                    <th key={`b${g}`} style={{ border: BK, borderRight: g < 2 ? THICK : BK, fontSize: '2.4mm' }}>B</th>,
+                    <th key={`a${g}`} style={{ border: RUN_B, fontSize: '2.4mm' }}>A</th>,
+                    <th key={`b${g}`} style={{ border: RUN_B, borderRight: g < 2 ? THICK : RUN_B, fontSize: '2.4mm' }}>B</th>,
                   ])}
                 </tr>
               </thead>
@@ -440,10 +443,10 @@ export default function JBAOfficialSheet({ game, players, statsMap, scoreEvents,
                         <span style={{ position: 'absolute', top: 0, left: '0.3mm', fontSize: '1.5mm', color: '#bbb', lineHeight: 1 }}>{n}</span>
                       )
                       return [
-                        <td key={`a${n}`} style={{ border: BK, borderBottom: aEnd ? THICK : BK, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: aM ? 'rgba(0,0,0,0.03)' : undefined }}>
+                        <td key={`a${n}`} style={{ border: RUN_B, borderBottom: aEnd ? THICK : RUN_B, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: aM ? 'rgba(0,0,0,0.03)' : undefined }}>
                           {cornerNum}{markContent(aM)}
                         </td>,
-                        <td key={`b${n}`} style={{ border: BK, borderBottom: bEnd ? THICK : BK, borderRight: g < 2 ? THICK : BK, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: bM ? 'rgba(0,0,0,0.03)' : undefined }}>
+                        <td key={`b${n}`} style={{ border: RUN_B, borderBottom: bEnd ? THICK : RUN_B, borderRight: g < 2 ? THICK : RUN_B, height: '4.2mm', position: 'relative', textAlign: 'center', verticalAlign: 'middle', background: bM ? 'rgba(0,0,0,0.03)' : undefined }}>
                           {cornerNum}{markContent(bM)}
                         </td>,
                       ]

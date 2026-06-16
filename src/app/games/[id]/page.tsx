@@ -650,8 +650,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   onAddEvent?: (req: AddEventRequest) => void
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
-  onRenamePlayer?: (playerId: string, newName: string) => void
-  onRenameOppPlayer?: (oppKey: string, newName: string) => void
+  onRenamePlayer?: (playerId: string, newName: string, newNumber: string) => void
+  onRenameOppPlayer?: (oppKey: string, newName: string, newNumber: string) => void
   homeTimeoutRecords?: TimeoutRecord[]
   oppTimeoutRecords?: TimeoutRecord[]
   foulEvents?: FoulEvent[]
@@ -661,7 +661,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const curQ = game.is_finished ? 99 : (currentQuarter ?? game.quarter ?? 1)
   const [deleteConfirm, setDeleteConfirm] = useState<{idx: number; ev: ScoreEvent; num: string; type: string} | null>(null)
   const [changeSel, setChangeSel] = useState('')  // 選手変更ダイアログの選択値
-  const [renameTarget, setRenameTarget] = useState<{playerId: string; name: string; isHome: boolean} | null>(null)  // 選手名の修正
+  const [renameTarget, setRenameTarget] = useState<{playerId: string; name: string; number: string; isHome: boolean} | null>(null)  // 選手名・背番号の修正
   const [addDialog, setAddDialog] = useState(false)
   const [addTeam, setAddTeam] = useState<'us'|'opponent'>('us')
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
@@ -908,7 +908,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     const canRename = isHome ? !!onRenamePlayer : !!onRenameOppPlayer
                     return (
                   <td
-                    onClick={canRename ? () => setRenameTarget({ playerId: p.id, name: p.name, isHome }) : undefined}
+                    onClick={canRename ? () => setRenameTarget({ playerId: p.id, name: p.name, number: p.number, isHome }) : undefined}
                     style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
                   >
                     {p.name}{canRename && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
@@ -1319,20 +1319,35 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
       {renameTarget && (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:202, padding:16}} onClick={() => setRenameTarget(null)}>
           <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:340, width:'100%'}} onClick={e => e.stopPropagation()}>
-            <div style={{fontWeight:'bold', fontSize:15, marginBottom:4, textAlign:'center'}}>{renameTarget.isHome ? '選手名を修正' : '相手選手名を修正'}</div>
-            <div style={{fontSize:11, color:'#888', marginBottom:14, textAlign:'center'}}>{renameTarget.isHome ? 'この名前はチーム名簿にも反映されます' : 'この試合の相手選手名を変更します'}</div>
-            <input
-              autoFocus
-              value={renameTarget.name}
-              onChange={e => setRenameTarget({ ...renameTarget, name: e.target.value })}
-              style={{width:'100%', padding:'10px', borderRadius:8, border:'1px solid #ccc', fontSize:16, marginBottom:16, boxSizing:'border-box', color:'#111'}}
-            />
+            <div style={{fontWeight:'bold', fontSize:15, marginBottom:4, textAlign:'center'}}>{renameTarget.isHome ? '選手を修正' : '相手選手を修正'}</div>
+            <div style={{fontSize:11, color:'#888', marginBottom:14, textAlign:'center'}}>{renameTarget.isHome ? '名前・背番号はチーム名簿にも反映されます' : 'この試合の相手選手の名前・背番号を変更します'}</div>
+            <div style={{display:'flex', gap:8, marginBottom:16}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10, color:'#888', marginBottom:3}}>選手名</div>
+                <input
+                  autoFocus
+                  value={renameTarget.name}
+                  onChange={e => setRenameTarget({ ...renameTarget, name: e.target.value })}
+                  style={{width:'100%', padding:'10px', borderRadius:8, border:'1px solid #ccc', fontSize:16, boxSizing:'border-box', color:'#111'}}
+                />
+              </div>
+              <div style={{width:'80px'}}>
+                <div style={{fontSize:10, color:'#888', marginBottom:3}}>背番号</div>
+                <input
+                  value={renameTarget.number}
+                  onChange={e => setRenameTarget({ ...renameTarget, number: e.target.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '') })}
+                  inputMode="numeric"
+                  maxLength={3}
+                  style={{width:'100%', padding:'10px', borderRadius:8, border:'1px solid #ccc', fontSize:16, boxSizing:'border-box', textAlign:'center', fontWeight:'bold', color:'#ea580c'}}
+                />
+              </div>
+            </div>
             <div style={{display:'flex', gap:8}}>
               <button onClick={() => setRenameTarget(null)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:14}}>キャンセル</button>
               <button
                 onClick={() => {
                   const n = renameTarget.name.trim()
-                  if (n) { if (renameTarget.isHome) onRenamePlayer?.(renameTarget.playerId, n); else onRenameOppPlayer?.(renameTarget.playerId, n) }
+                  if (n) { if (renameTarget.isHome) onRenamePlayer?.(renameTarget.playerId, n, renameTarget.number); else onRenameOppPlayer?.(renameTarget.playerId, n, renameTarget.number) }
                   setRenameTarget(null)
                 }}
                 style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#0ea5e9', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:14}}
@@ -1356,8 +1371,8 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onAddEvent?: (req: AddEventRequest) => void
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
   onFoulEdit?: (playerId: string, isHome: boolean, delta: 1|-1, foulType: keyof OppFoulData) => void
-  onRenamePlayer?: (playerId: string, newName: string) => void
-  onRenameOppPlayer?: (oppKey: string, newName: string) => void
+  onRenamePlayer?: (playerId: string, newName: string, newNumber: string) => void
+  onRenameOppPlayer?: (oppKey: string, newName: string, newNumber: string) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
   // LINE共有用: チームの共有トークンを取得
@@ -2241,33 +2256,39 @@ export default function GamePage() {
     }
   }
 
-  // スコアシートから選手名を修正する（チーム名簿の players レコードも更新）
-  async function handleRenamePlayer(playerId: string, newName: string) {
-    const trimmed = newName.trim()
-    if (!trimmed) return
-    setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, name: trimmed } : p))
+  // スコアシートから選手名・背番号を修正する（チーム名簿の players レコードも更新）
+  async function handleEditPlayer(playerId: string, newName: string, newNumber: string) {
+    const name = newName.trim()
+    const number = newNumber.trim()
+    if (!name) return
+    setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, name, number } : p))
     try {
       const supabase = createClient()
-      await supabase.from('players').update({ name: trimmed }).eq('id', playerId)
+      await supabase.from('players').update({ name, number }).eq('id', playerId)
     } catch { /* オフライン時もローカルには反映済み */ }
   }
 
-  // 相手チームの選手名を修正する。相手選手のkeyは `opp_番号_名前` 由来のため、
-  // 改名時は全参照（ファウル・出場・永続化）を旧key→新keyへ移行する。
-  function handleRenameOppPlayer(oldKey: string, newName: string) {
-    const trimmed = newName.trim()
-    if (!trimmed) return
+  // 相手チームの選手名・背番号を修正する。相手選手のkeyは `opp_番号_名前` 由来のため、
+  // 変更時は全参照（ランニングスコア・ファウル・出場・永続化）を旧key→新keyへ移行する。
+  function handleEditOppPlayer(oldKey: string, newName: string, newNumber: string) {
+    const name = newName.trim()
+    const number = newNumber.trim()
+    if (!name) return
     const target = oppPlayerList.find(p => p.key === oldKey)
-    if (!target || target.name === trimmed) return
-    const newKey = `opp_${target.number}_${trimmed}`
+    if (!target || (target.name === name && target.number === number)) return
+    const newKey = `opp_${number}_${name}`
+    const oldDisplay = `#${target.number} ${target.name}`
+    const newDisplay = `#${number} ${name}`
 
-    setOppPlayerList(prev => prev.map(p => p.key === oldKey ? { ...p, key: newKey, name: trimmed } : p))
+    setOppPlayerList(prev => prev.map(p => p.key === oldKey ? { ...p, key: newKey, number, name } : p))
     setOpponentPlayerKeys(prev => {
       const next = new Set(prev)
       next.delete(`${target.number}_${target.name}`)
-      next.add(`${target.number}_${trimmed}`)
+      next.add(`${number}_${name}`)
       return next
     })
+    // ランニングスコアの相手表示は opp_player_name の #番号 を参照するため更新
+    setScoreEvents(prev => prev.map(e => e.team === 'opponent' && e.opp_player_name === oldDisplay ? { ...e, opp_player_name: newDisplay } : e))
     setFoulEvents(prev => prev.map(e => e.team === 'opponent' && e.key === oldKey ? { ...e, key: newKey } : e))
     setOppFoulsMap(prev => {
       if (!(oldKey in prev)) return prev
@@ -2297,8 +2318,8 @@ export default function GamePage() {
         } catch { /* ignore */ }
       }
     }
-    // 相手選手リストを永続化（名前更新）
-    const updatedList = oppPlayerList.map(p => ({ number: p.number, name: p.key === oldKey ? trimmed : p.name }))
+    // 相手選手リストを永続化（番号・名前更新）
+    const updatedList = oppPlayerList.map(p => p.key === oldKey ? { number, name } : { number: p.number, name: p.name })
     localStorage.setItem(`game_${id}_opponent_players`, JSON.stringify(updatedList))
     try { createClient().from('games').update({ opponent_players: updatedList }).eq('id', id) } catch { /* ignore */ }
   }
@@ -2572,8 +2593,12 @@ export default function GamePage() {
         const existing = statsMap.get(playerId)
         if (existing?.id) {
           const existingR = existing as unknown as Record<string, number>
+          // 同一キーへの複数変更（例: フリースロー2本連続）を合算してから適用する。
+          // 1回ずつ existingR を基準に上書きすると delta が累積されず、最後の1件分しか反映されない。
+          const deltaByKey: Record<string, number> = {}
+          for (const c of changes) deltaByKey[c.key] = (deltaByKey[c.key] ?? 0) + c.delta
           const updates: Record<string, number> = {}
-          for (const c of changes) updates[c.key] = Math.max(0, (existingR[c.key] ?? 0) + c.delta)
+          for (const [key, delta] of Object.entries(deltaByKey)) updates[key] = Math.max(0, (existingR[key] ?? 0) + delta)
           await supabase.from('player_stats').update(updates).eq('id', existing.id)
         } else {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2794,7 +2819,7 @@ export default function GamePage() {
   if (!game) return null
 
   if (game.is_finished) {
-    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} onRenamePlayer={handleRenamePlayer} onRenameOppPlayer={handleRenameOppPlayer} />
+    return <FinishedGameView game={game} players={players} statsMap={statsMap} scoreEvents={scoreEvents} oppPlayerList={oppPlayerList} onDeleteEvent={handleDeleteScoreEvent} onAddEvent={handleAddScoreEvent} onChangeEventPlayer={handleChangeEventPlayer} onFoulEdit={handleFoulEdit} onRenamePlayer={handleEditPlayer} onRenameOppPlayer={handleEditOppPlayer} />
   }
 
   if (courtSetupMode) {
@@ -3023,8 +3048,8 @@ export default function GamePage() {
             onAddEvent={handleAddScoreEvent}
             onChangeEventPlayer={handleChangeEventPlayer}
             onFoulEdit={handleFoulEdit}
-            onRenamePlayer={handleRenamePlayer}
-            onRenameOppPlayer={handleRenameOppPlayer}
+            onRenamePlayer={handleEditPlayer}
+            onRenameOppPlayer={handleEditOppPlayer}
             foulEvents={foulEvents}
             currentQuarter={currentQuarter}
             homeTimeoutRecords={homeTimeoutRecords}
