@@ -75,6 +75,9 @@ function emptyStats(gameId: string, playerId: string): PlayerStat {
   return { id: '', game_id: gameId, player_id: playerId, fg2_made: 0, fg2_attempt: 0, fg3_made: 0, fg3_attempt: 0, ft_made: 0, ft_attempt: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, fouls: 0, fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, minutes: 0, plus_minus: 0 }
 }
 
+// player_stats の数値項目（重複行の合算・修復に使用）
+const STAT_NUMERIC_KEYS = ['fg2_made','fg2_attempt','fg3_made','fg3_attempt','ft_made','ft_attempt','rebounds','assists','steals','blocks','turnovers','fouls','fouls_plain','fouls_1ft','fouls_2ft','fouls_3ft','technical_fouls','minutes','plus_minus'] as const
+
 function pct(made: number, attempt: number) {
   if (attempt === 0) return '—'
   return Math.round((made / attempt) * 100) + '%'
@@ -1815,6 +1818,8 @@ export default function GamePage() {
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scoreEventsSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveStatsRef = useRef<() => Promise<void>>(async () => {})
+  const savingLockRef = useRef(false)   // 保存処理の直列化ロック（重複INSERT防止）
+  const saveAgainRef = useRef(false)    // 保存中に来た変更を保存後に再実行するフラグ
   const gidRef = useRef(0)
   const skipUndoStackRef = useRef(false)
   const gameRef = useRef<Game | null>(null)
@@ -1919,6 +1924,46 @@ export default function GamePage() {
     return () => { if (scoreEventsSyncTimer.current) clearTimeout(scoreEventsSyncTimer.current) }
   }, [scoreEvents, id])
 
+  // 得点系スタッツ（成功数）をランニングスコアに合わせて自動修復する。
+  // 得点した成功は必ずイベントとして残るため、個人スタッツの成功数がイベント数と
+  // ズレている場合は過去の保存不整合が原因。イベント数を正として直す。
+  // pending（未保存の操作）がある間はスキップして二重計上を防ぐ。
+  const reconcileGuardRef = useRef(false)
+  useEffect(() => {
+    if (loading || reconcileGuardRef.current) return
+    if (pending.length > 0 || savingLockRef.current) return
+    if (scoreEvents.length === 0 || statsMap.size === 0) return
+    // 自チーム選手ごとの成功数（2P/3P/FT）をイベントから集計
+    const made = new Map<string, { fg2: number; fg3: number; ft: number }>()
+    for (const ev of scoreEvents) {
+      if (ev.team !== 'us' || !ev.player_id) continue
+      const m = made.get(ev.player_id) ?? { fg2: 0, fg3: 0, ft: 0 }
+      if (ev.points === 3) m.fg3++; else if (ev.points === 2) m.fg2++; else if (ev.points === 1) m.ft++
+      made.set(ev.player_id, m)
+    }
+    const fixes: { sid: string; upd: Record<string, number> }[] = []
+    for (const [pid, m] of made) {
+      const stat = statsMap.get(pid)
+      if (!stat?.id) continue
+      const upd: Record<string, number> = {}
+      if (stat.fg2_made !== m.fg2) { upd.fg2_made = m.fg2; if ((stat.fg2_attempt ?? 0) < m.fg2) upd.fg2_attempt = m.fg2 }
+      if (stat.fg3_made !== m.fg3) { upd.fg3_made = m.fg3; if ((stat.fg3_attempt ?? 0) < m.fg3) upd.fg3_attempt = m.fg3 }
+      if (stat.ft_made !== m.ft) { upd.ft_made = m.ft; if ((stat.ft_attempt ?? 0) < m.ft) upd.ft_attempt = m.ft }
+      if (Object.keys(upd).length > 0) fixes.push({ sid: stat.id, upd })
+    }
+    if (fixes.length === 0) return
+    reconcileGuardRef.current = true
+    ;(async () => {
+      try {
+        const supabase = createClient()
+        for (const f of fixes) await supabase.from('player_stats').update(f.upd).eq('id', f.sid)
+        await loadData()
+      } catch { /* ignore */ }
+      reconcileGuardRef.current = false
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, pending.length, scoreEvents, statsMap])
+
   useEffect(() => {
     localStorage.setItem(`undo_stack_${id}`, JSON.stringify(undoStack))
   }, [undoStack, id])
@@ -1957,10 +2002,41 @@ export default function GamePage() {
       supabase.from('player_stats').select('*').eq('game_id', id),
     ])
 
+    // 同じ選手に複数の player_stats 行（過去の同時保存による重複）がある場合は
+    // 合算して1行にまとめ、余分な行は削除する（自己修復）。これによりスコアシートと
+    // 個人スタッツの差異を解消する。
     const map = new Map<string, PlayerStat>()
-    statsData?.forEach(s => map.set(s.player_id, s))
+    const dupRowIds: string[] = []
+    const playersWithDup = new Set<string>()
+    for (const s of (statsData ?? [])) {
+      const existing = map.get(s.player_id)
+      if (!existing) {
+        map.set(s.player_id, { ...s } as PlayerStat)
+      } else {
+        const ex = existing as unknown as Record<string, number>
+        const cur = s as unknown as Record<string, number>
+        for (const k of STAT_NUMERIC_KEYS) ex[k] = (ex[k] ?? 0) + (cur[k] ?? 0)
+        dupRowIds.push(s.id)
+        playersWithDup.add(s.player_id)
+      }
+    }
     setStatsMap(map)
     setPlayers(playersData ?? [])
+
+    // 重複行の修復：合算値を残す1行に書き戻してから余分な行を削除する
+    if (dupRowIds.length > 0) {
+      try {
+        for (const pid of playersWithDup) {
+          const merged = map.get(pid)
+          if (merged?.id) {
+            const upd: Record<string, number> = {}
+            for (const k of STAT_NUMERIC_KEYS) upd[k] = (merged as unknown as Record<string, number>)[k] ?? 0
+            await supabase.from('player_stats').update(upd).eq('id', merged.id)
+          }
+        }
+        await supabase.from('player_stats').delete().in('id', dupRowIds)
+      } catch { /* 修復失敗時も合算済みのmapで表示は正しい */ }
+    }
 
     const savedPending = localStorage.getItem(`pending_${id}`)
     if (savedPending) setPending(JSON.parse(savedPending))
@@ -2589,12 +2665,19 @@ export default function GamePage() {
   }
 
   const saveStats = useCallback(async () => {
+    // 保存処理を直列化（同時並行でDBに重複INSERTされるのを防ぐ）
+    if (savingLockRef.current) { saveAgainRef.current = true; return }
+    savingLockRef.current = true
     setSaving(true)
     const supabase = createClient()
+    // この保存で処理するpendingを固定（保存中に増えた分は消さずに残す）
+    const pendingSnapshot = pending
+    const savedGids = new Set(pendingSnapshot.map(c => c.gid))
 
-    if (pending.length > 0) {
+    try {
+    if (pendingSnapshot.length > 0) {
       const grouped = new Map<string, PendingChange[]>()
-      for (const c of pending) {
+      for (const c of pendingSnapshot) {
         if (!grouped.has(c.playerId)) grouped.set(c.playerId, [])
         grouped.get(c.playerId)!.push(c)
       }
@@ -2622,7 +2705,7 @@ export default function GamePage() {
       // 取り消し用に保存（逆操作の reversal 時はスキップ）
       if (!skipUndoStackRef.current) {
         const byGid = new Map<number, PendingChange[]>()
-        for (const c of pending) {
+        for (const c of pendingSnapshot) {
           if (!byGid.has(c.gid)) byGid.set(c.gid, [])
           byGid.get(c.gid)!.push(c)
         }
@@ -2677,8 +2760,16 @@ export default function GamePage() {
     }
 
     await loadData()
-    setPending([])
-    setSaving(false)
+    // 保存した分だけ pending から除去（保存中に増えた分は残す＝取りこぼし防止）
+    setPending(prev => prev.filter(c => !savedGids.has(c.gid)))
+    } catch (e) {
+      console.error('saveStats error:', e)
+    } finally {
+      setSaving(false)
+      savingLockRef.current = false   // 例外時もロックを必ず解放（デッドロック防止）
+    }
+    // 保存中に新たな変更が来ていたら、もう一度保存する
+    if (saveAgainRef.current) { saveAgainRef.current = false; setTimeout(() => saveStatsRef.current(), 50) }
   }, [pending, statsMap, id])
 
   // saveStatsRef を常に最新に同期（タイマーのクロージャずれ対策）
