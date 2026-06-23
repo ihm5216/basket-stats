@@ -29,3 +29,42 @@ export async function hasFreeAccess(supabase: SupabaseClient): Promise<boolean> 
     return false
   }
 }
+
+/**
+ * 無料枠の判定に使う「試合終了の累計回数」を返す。
+ *
+ * game_finish_counters テーブル（DBトリガーが試合終了ごとに +1／削除では減らない）を読む。
+ * これにより「終了済み試合を消して無料枠をリセットする」抜け道を塞ぐ。
+ * カウンターが未作成（マイグレーション前）やエラー時は、従来どおり
+ * 現在の終了済み試合数を数えてフォールバックする。
+ */
+export async function getFinishedGamesCount(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('game_finish_counters')
+      .select('finished_total')
+      .eq('user_id', userId)
+      .maybeSingle()
+    // テーブルが存在する場合：行があればその累計、無ければ 0
+    if (!error) return data?.finished_total ?? 0
+  } catch {
+    /* フォールバックへ */
+  }
+  // フォールバック：現在の終了済み試合数（旧挙動）
+  try {
+    const { data: teams } = await supabase.from('teams').select('id').eq('user_id', userId)
+    const teamIds = (teams ?? []).map((t: { id: string }) => t.id)
+    if (teamIds.length === 0) return 0
+    const { count } = await supabase
+      .from('games')
+      .select('id', { count: 'exact', head: true })
+      .in('team_id', teamIds)
+      .eq('is_finished', true)
+    return count ?? 0
+  } catch {
+    return 0
+  }
+}

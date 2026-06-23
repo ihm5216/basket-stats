@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
+import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 import { Team, Game } from '@/types'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -79,17 +79,8 @@ function DashboardContent() {
     setTeams(myTeams)
     setRecentGames((gamesData as (Game & { team: Team })[]) ?? [])
 
-    // 終了済み試合数カウント
-    let finishedCount = 0
-    if (myTeams.length > 0) {
-      const teamIds = myTeams.map(t => t.id)
-      const { count } = await supabase
-        .from('games')
-        .select('id', { count: 'exact', head: true })
-        .in('team_id', teamIds)
-        .eq('is_finished', true)
-      finishedCount = count ?? 0
-    }
+    // 終了済み試合数（累計カウンター：試合を削除しても減らない）
+    const finishedCount = await getFinishedGamesCount(supabase, user.id)
 
     // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
     const hasSubscription = subData?.status === 'active'

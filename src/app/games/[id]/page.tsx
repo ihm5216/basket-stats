@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
+import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 import { Game, Player, PlayerStat } from '@/types'
 import { calcPoints } from '@/lib/stats'
 import JBAOfficialSheet from './JBAOfficialSheet'
@@ -2838,17 +2838,11 @@ export default function GamePage() {
       const hasSubscription = sub?.status === 'active' || freeAccess
 
       if (!hasSubscription) {
-        // このユーザーの終了済み試合数を確認
-        const { data: teams } = await supabase.from('teams').select('id').eq('user_id', user.id)
-        const teamIds = teams?.map(t => t.id) ?? []
-        if (teamIds.length > 0) {
-          const { count } = await supabase.from('games')
-            .select('id', { count: 'exact', head: true })
-            .in('team_id', teamIds).eq('is_finished', true)
-          if ((count ?? 0) >= FREE_GAMES_LIMIT) {
-            setShowPaywall(true)
-            return  // ← 試合終了をブロックしてペイウォールを表示
-          }
+        // 累計の試合終了回数で判定（試合を削除しても減らない＝無料枠リセット不可）
+        const finishedTotal = await getFinishedGamesCount(supabase, user.id)
+        if (finishedTotal >= FREE_GAMES_LIMIT) {
+          setShowPaywall(true)
+          return  // ← 試合終了をブロックしてペイウォールを表示
         }
       }
     }

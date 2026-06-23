@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
+import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 
 export { FREE_GAMES_LIMIT }
 
@@ -16,24 +16,8 @@ export type TrialStatus = {
 export async function getTrialStatus(userId: string): Promise<TrialStatus> {
   const supabase = await createClient()
 
-  // ユーザーのチームIDを取得
-  const { data: teams } = await supabase
-    .from('teams')
-    .select('id')
-    .eq('user_id', userId)
-
-  const teamIds = teams?.map(t => t.id) ?? []
-
-  // 終了済み試合数をカウント
-  let finishedGames = 0
-  if (teamIds.length > 0) {
-    const { count } = await supabase
-      .from('games')
-      .select('id', { count: 'exact', head: true })
-      .in('team_id', teamIds)
-      .eq('is_finished', true)
-    finishedGames = count ?? 0
-  }
+  // 終了済み試合数（累計カウンター：試合を削除しても減らない）
+  const finishedGames = await getFinishedGamesCount(supabase, userId)
 
   // サブスクリプション確認
   const { data: sub } = await supabase
