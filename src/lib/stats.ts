@@ -103,7 +103,12 @@ export function exportToCSV(seasonStats: SeasonStats[], teamName: string): void 
     s.avg_minutes,
   ])
 
-  const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+  // 選手名などにカンマ・引用符・改行が含まれても列がズレないようエスケープ
+  const esc = (v: string | number): string => {
+    const s = String(v ?? '')
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n')
   const bom = '﻿'
   const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
