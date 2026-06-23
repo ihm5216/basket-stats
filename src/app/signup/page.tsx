@@ -89,7 +89,7 @@ export default function SignupPage() {
       </Link>
 
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-white mb-1 text-center">5試合 無料で始める</h1>
+        <h1 className="text-2xl font-bold text-white mb-1 text-center">3試合 無料で始める</h1>
         <p className="text-xs text-center mb-7" style={{ color: 'var(--muted)' }}>
           クレジットカード不要・いつでも解約OK<br />
           すでにアカウントをお持ちの方は{' '}

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { hasFreeAccess } from '@/lib/freeAccess'
+import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 import { Game, Player, PlayerStat } from '@/types'
 import { calcPoints } from '@/lib/stats'
 import JBAOfficialSheet from './JBAOfficialSheet'
@@ -1838,7 +1838,7 @@ export default function GamePage() {
   const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, OppFoulData>>({})
   // 5ファウルアウト通知
   const [foulOutAlert, setFoulOutAlert] = useState<{ playerName: string; playerNumber: string } | null>(null)
-  // ペイウォール（5試合無料制限）
+  // ペイウォール（3試合無料制限）
   const [showPaywall, setShowPaywall] = useState(false)
   // ゲームクロック（10分 = 600秒）
   const [timerSeconds, setTimerSeconds] = useState(600)
@@ -2824,7 +2824,7 @@ export default function GamePage() {
   async function finishGame() {
     if (!confirm('試合を終了しますか？')) return
 
-    // ── 5試合無料制限チェック ──────────────────────────────────
+    // ── 3試合無料制限チェック ──────────────────────────────────
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
@@ -2845,7 +2845,7 @@ export default function GamePage() {
           const { count } = await supabase.from('games')
             .select('id', { count: 'exact', head: true })
             .in('team_id', teamIds).eq('is_finished', true)
-          if ((count ?? 0) >= 5) {
+          if ((count ?? 0) >= FREE_GAMES_LIMIT) {
             setShowPaywall(true)
             return  // ← 試合終了をブロックしてペイウォールを表示
           }
@@ -3458,14 +3458,14 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* ペイウォール — 5試合無料制限 */}
+      {/* ペイウォール — 3試合無料制限 */}
       {showPaywall && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-5">
           <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
             <div className="text-4xl mb-3">🏀</div>
-            <h2 className="text-xl font-bold text-white mb-2">5試合の無料体験終了</h2>
+            <h2 className="text-xl font-bold text-white mb-2">3試合の無料体験終了</h2>
             <p className="text-sm leading-relaxed mb-1" style={{ color: 'var(--muted)' }}>
-              無料体験の5試合を使い切りました。<br />
+              無料体験の3試合を使い切りました。<br />
               続けるには月額プランへの登録が必要です。
             </p>
             <p className="text-xs mb-5" style={{ color: 'var(--muted)' }}>

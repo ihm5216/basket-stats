@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { hasFreeAccess } from '@/lib/freeAccess'
+import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 
-export const FREE_GAMES_LIMIT = 5
+export { FREE_GAMES_LIMIT }
 
 export type TrialStatus = {
   finishedGames: number       // 終了済み試合数
@@ -43,7 +43,7 @@ export async function getTrialStatus(userId: string): Promise<TrialStatus> {
     .maybeSingle()
 
   // 'trialing' は登録時トリガーが全員に付与する初期値のため有料扱いにしない
-  // （無料枠は「5試合」でカウント管理する。有料は Stripe 決済済みの 'active' のみ）
+  // （無料枠は「3試合」でカウント管理する。有料は Stripe 決済済みの 'active' のみ）
   // 無料ご招待（オーナー・友達）は free_access テーブルで判定し、決済なしでも無制限。
   const freeAccess = await hasFreeAccess(supabase)
   const hasSubscription = sub?.status === 'active' || freeAccess

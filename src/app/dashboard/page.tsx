@@ -4,13 +4,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { hasFreeAccess } from '@/lib/freeAccess'
+import { hasFreeAccess, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
 import { Team, Game } from '@/types'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Suspense } from 'react'
-
-const FREE_GAMES_LIMIT = 5
 
 type TrialInfo = {
   finishedGames: number
@@ -271,7 +269,7 @@ function TrialStatusBar({ trial }: { trial: TrialInfo }) {
             </Link>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
-            5試合の無料体験ありがとうございました。続けるには月額プランへの登録が必要です。データは消えません。
+            3試合の無料体験ありがとうございました。続けるには月額プランへの登録が必要です。データは消えません。
           </p>
         </div>
       </div>

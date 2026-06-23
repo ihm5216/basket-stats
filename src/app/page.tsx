@@ -62,7 +62,7 @@ export default function Home() {
             {/* 信頼バッジ */}
             <div className="flex items-center gap-3 mb-6 mt-3">
               <div className="flex items-center gap-1 text-xs" style={{ color: '#60a5fa' }}>
-                <span>⭐</span><span>5試合無料</span>
+                <span>⭐</span><span>3試合無料</span>
               </div>
               <div className="flex items-center gap-1 text-xs" style={{ color: '#60a5fa' }}>
                 <span>🔒</span><span>カード不要</span>
@@ -77,7 +77,7 @@ export default function Home() {
               <Link href="/signup"
                 className="w-full text-center font-bold text-white rounded-2xl py-4 text-base shadow-lg active:scale-95 transition-transform"
                 style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
-                5試合 無料で始める →
+                3試合 無料で始める →
               </Link>
               <Link href="/login"
                 className="w-full text-center font-bold rounded-2xl py-3.5 text-sm active:scale-95 transition-transform"
@@ -182,7 +182,7 @@ export default function Home() {
           <Link href="/signup"
             className="block w-full text-center font-bold text-white rounded-2xl py-4 text-base shadow-lg active:scale-95 transition-transform mb-3"
             style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
-            5試合 無料で始める
+            3試合 無料で始める
           </Link>
           <p className="text-xs" style={{ color: 'var(--muted)' }}>クレジットカード不要・いつでも解約OK</p>
         </div>
@@ -207,7 +207,7 @@ export default function Home() {
         <Link href="/signup"
           className="block w-full text-center font-bold text-white rounded-2xl py-4 text-base shadow-lg active:scale-95 transition-transform mb-3"
           style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
-          5試合 無料で始める →
+          3試合 無料で始める →
         </Link>
         <p className="text-xs" style={{ color: 'var(--muted)' }}>クレジットカード不要・いつでも解約OK</p>
       </section>
@@ -260,7 +260,7 @@ const differentiators = [
 ]
 
 const faqs = [
-  { q: '無料期間中にクレジットカードは必要ですか？', a: '不要です。最初の5試合は完全無料でお使いいただけます。それ以降は月500円でご利用いただけます。' },
+  { q: '無料期間中にクレジットカードは必要ですか？', a: '不要です。最初の3試合は完全無料でお使いいただけます。それ以降は月500円でご利用いただけます。' },
   { q: 'チームのメンバー全員で使えますか？', a: 'はい。月500円でチーム全員が無制限で使えます。選手・保護者・コーチ全員に共有できます。' },
   { q: 'JBA公式大会の紙スコアシートは別途必要ですか？', a: '公式大会では紙の提出が求められる場合があります。本アプリは練習試合・リーグ戦での記録・共有に最適です。' },
   { q: '途中で解約できますか？', a: 'いつでも解約できます。違約金等は一切ありません。' },

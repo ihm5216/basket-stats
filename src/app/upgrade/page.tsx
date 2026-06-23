@@ -37,7 +37,7 @@ function UpgradeContent() {
         {/* ヘッダー */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🏀</div>
-          <h1 className="text-2xl font-bold text-white mb-2">5試合の無料体験、いかがでしたか？</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">3試合の無料体験、いかがでしたか？</h1>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
             続けるには月額プランへの登録が必要です。<br />
             データはそのまま引き継がれます。
