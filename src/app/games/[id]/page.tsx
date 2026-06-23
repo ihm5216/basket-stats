@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { hasFreeAccess } from '@/lib/freeAccess'
 import { Game, Player, PlayerStat } from '@/types'
 import { calcPoints } from '@/lib/stats'
 import JBAOfficialSheet from './JBAOfficialSheet'
@@ -2827,11 +2828,14 @@ export default function GamePage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      // サブスクリプション確認
-      const { data: sub } = await supabase
-        .from('subscriptions').select('status').eq('user_id', user.id).maybeSingle()
+      // サブスクリプション確認 + 無料ご招待（オーナー・友達）確認
+      const [{ data: sub }, freeAccess] = await Promise.all([
+        supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
+        hasFreeAccess(supabase),
+      ])
       // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
-      const hasSubscription = sub?.status === 'active'
+      // 無料ご招待のユーザーは決済なしでも無制限に使える
+      const hasSubscription = sub?.status === 'active' || freeAccess
 
       if (!hasSubscription) {
         // このユーザーの終了済み試合数を確認

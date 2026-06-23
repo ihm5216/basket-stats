@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { hasFreeAccess } from '@/lib/freeAccess'
 import { Team, Game } from '@/types'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -15,6 +16,7 @@ type TrialInfo = {
   finishedGames: number
   remaining: number
   hasSubscription: boolean
+  freeAccess: boolean      // オーナー / 友達の無料ご招待
   canPlay: boolean
 }
 
@@ -51,9 +53,10 @@ function DashboardContent() {
     setUserEmail(user.email ?? '')
 
     // まずチームを取得、その後ゲームを取得（RLS対応）
-    let [{ data: teamsData }, { data: subData }] = await Promise.all([
+    let [{ data: teamsData }, { data: subData }, freeAccess] = await Promise.all([
       supabase.from('teams').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
+      hasFreeAccess(supabase),
     ])
 
     // 保険: 登録時トリガーでのチーム自動作成が失敗していた場合、
@@ -96,7 +99,9 @@ function DashboardContent() {
       finishedGames: finishedCount,
       remaining: Math.max(0, FREE_GAMES_LIMIT - finishedCount),
       hasSubscription,
-      canPlay: finishedCount < FREE_GAMES_LIMIT || hasSubscription,
+      freeAccess,
+      // 有料 or 無料ご招待なら無制限
+      canPlay: finishedCount < FREE_GAMES_LIMIT || hasSubscription || freeAccess,
     })
 
     clearTimeout(timeout)
@@ -148,9 +153,17 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* ── 試用状況バー ── */}
-        {trial && !trial.hasSubscription && (
+        {/* ── 試用状況バー（有料・無料ご招待のときは表示しない） ── */}
+        {trial && !trial.hasSubscription && !trial.freeAccess && (
           <TrialStatusBar trial={trial} />
+        )}
+
+        {/* ── 無料ご招待 バッジ（オーナー・友達） ── */}
+        {trial && !trial.hasSubscription && trial.freeAccess && (
+          <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm"
+            style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }}>
+            <span>🎁</span><span className="font-bold">無料ご招待プラン 利用中 — 全試合が無制限です</span>
+          </div>
         )}
 
         {/* ── 有料プラン バッジ ── */}
