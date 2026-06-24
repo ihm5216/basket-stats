@@ -58,6 +58,7 @@ export type PlayerStat = {
   fouls_2ft?: number
   fouls_3ft?: number
   technical_fouls?: number
+  fouls_unsportsmanlike?: number   // アンスポーツマンライク（U）
   minutes: number
   plus_minus: number
 }

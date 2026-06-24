@@ -24,7 +24,7 @@ type RunMark = { type: '2P' | '3P' | 'FT'; num: string; quarter: number }
 type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: string }
 
 function foulLabel(t: string): string {
-  return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
+  return t === 'technical_fouls' ? 'T' : t === 'fouls_unsportsmanlike' ? 'U' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
 type CourtData = {
@@ -33,7 +33,7 @@ type CourtData = {
   homeSubs?: Record<string, string[]>
   oppSubs?: Record<string, string[]>
   scoresheetOv?: {
-    oppPlayers?: Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number }>
+    oppPlayers?: Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number; fouls_unsportsmanlike?: number }>
   }
   foulEvents?: FoulEvent[]
 }
@@ -58,6 +58,7 @@ function foulParts(stat?: Partial<PlayerStat>): string[] {
   for (let i = 0; i < (stat.fouls_2ft ?? 0); i++) parts.push('P2')
   for (let i = 0; i < (stat.fouls_3ft ?? 0); i++) parts.push('P3')
   for (let i = 0; i < (stat.technical_fouls ?? 0); i++) parts.push('T')
+  for (let i = 0; i < (stat.fouls_unsportsmanlike ?? 0); i++) parts.push('U')
   return parts
 }
 

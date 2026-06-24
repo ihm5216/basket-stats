@@ -12,8 +12,8 @@ import JBAOfficialSheet from './JBAOfficialSheet'
 type StatKey = keyof Omit<PlayerStat, 'id' | 'game_id' | 'player_id'>
 type PendingChange = { playerId: string; key: StatKey; delta: number; gid: number }
 type OppPlayer = { key: string; number: string; name: string }
-type OppFoulData = { fouls_plain: number; fouls_1ft: number; fouls_2ft: number; fouls_3ft: number; technical_fouls: number }
-function emptyOppFoul(): OppFoulData { return { fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0 } }
+type OppFoulData = { fouls_plain: number; fouls_1ft: number; fouls_2ft: number; fouls_3ft: number; technical_fouls: number; fouls_unsportsmanlike: number }
+function emptyOppFoul(): OppFoulData { return { fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, fouls_unsportsmanlike: 0 } }
 type ScoreEvent = {
   gid?: number
   quarter: number
@@ -85,11 +85,11 @@ function removeAndAdjust(events: ScoreEvent[], idx: number): ScoreEvent[] {
 }
 
 function emptyStats(gameId: string, playerId: string): PlayerStat {
-  return { id: '', game_id: gameId, player_id: playerId, fg2_made: 0, fg2_attempt: 0, fg3_made: 0, fg3_attempt: 0, ft_made: 0, ft_attempt: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, fouls: 0, fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, minutes: 0, plus_minus: 0 }
+  return { id: '', game_id: gameId, player_id: playerId, fg2_made: 0, fg2_attempt: 0, fg3_made: 0, fg3_attempt: 0, ft_made: 0, ft_attempt: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, fouls: 0, fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, fouls_unsportsmanlike: 0, minutes: 0, plus_minus: 0 }
 }
 
 // player_stats の数値項目（重複行の合算・修復に使用）
-const STAT_NUMERIC_KEYS = ['fg2_made','fg2_attempt','fg3_made','fg3_attempt','ft_made','ft_attempt','rebounds','assists','steals','blocks','turnovers','fouls','fouls_plain','fouls_1ft','fouls_2ft','fouls_3ft','technical_fouls','minutes','plus_minus'] as const
+const STAT_NUMERIC_KEYS = ['fg2_made','fg2_attempt','fg3_made','fg3_attempt','ft_made','ft_attempt','rebounds','assists','steals','blocks','turnovers','fouls','fouls_plain','fouls_1ft','fouls_2ft','fouls_3ft','technical_fouls','fouls_unsportsmanlike','minutes','plus_minus'] as const
 
 function pct(made: number, attempt: number) {
   if (attempt === 0) return '—'
@@ -97,7 +97,7 @@ function pct(made: number, attempt: number) {
 }
 
 function getTotalFouls(stat: PlayerStat): number {
-  return (stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0)
+  return (stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0) + (stat.fouls_unsportsmanlike ?? 0)
 }
 
 /**
@@ -120,12 +120,14 @@ function getFoulNotation(stat: PlayerStat): string {
   const ft2 = stat.fouls_2ft ?? 0
   const ft3 = stat.fouls_3ft ?? 0
   const tech = stat.technical_fouls ?? 0
+  const unsp = stat.fouls_unsportsmanlike ?? 0
 
   for (let i = 0; i < plain; i++) parts.push('P')
   for (let i = 0; i < ft1; i++) parts.push('P1')
   for (let i = 0; i < ft2; i++) parts.push('P2')
   for (let i = 0; i < ft3; i++) parts.push('P3')
   for (let i = 0; i < tech; i++) parts.push('T')
+  for (let i = 0; i < unsp; i++) parts.push('U')
 
   return parts.join(' ')
 }
@@ -212,7 +214,7 @@ function RunningScoreView({ events, teamName, opponentName, players }: {
 type ScoresheetOverrides = {
   quarterScores: Record<number, { us?: number; opp?: number }>
   homePlayers: Record<string, { pts?: number; fouls?: number }>
-  oppPlayers: Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number }>
+  oppPlayers: Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number; fouls_unsportsmanlike?: number }>
 }
 type RunMarkData = { type: '2P' | '3P' | 'FT'; num: string; quarter?: number }
 
@@ -668,7 +670,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
 // ─── JBA 公式スコアシート (紙ベース) ────────────────────────────────────────
 // ファウル種別 → スコアシート表記
 function foulLabel(t: keyof OppFoulData): string {
-  return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
+  return t === 'technical_fouls' ? 'T' : t === 'fouls_unsportsmanlike' ? 'U' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
 function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter, category = 'general' }: {
@@ -779,6 +781,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
   function foulKeyFromPart(part: string): keyof OppFoulData {
     if (part === 'T') return 'technical_fouls'
+    if (part === 'U') return 'fouls_unsportsmanlike'
     if (part === 'P3') return 'fouls_3ft'
     if (part === 'P2') return 'fouls_2ft'
     if (part === 'P1') return 'fouls_1ft'
@@ -1124,7 +1127,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               // oppFoulsMap prop優先、なければ localStorage の scoresheet_ov から取得
               const foulEntry = oppFoulsMap?.[pid]
               if (foulEntry !== undefined) {
-                const total = foulEntry.fouls_plain + foulEntry.fouls_1ft + foulEntry.fouls_2ft + foulEntry.fouls_3ft + foulEntry.technical_fouls
+                const total = foulEntry.fouls_plain + foulEntry.fouls_1ft + foulEntry.fouls_2ft + foulEntry.fouls_3ft + foulEntry.technical_fouls + foulEntry.fouls_unsportsmanlike
                 if (!total) return undefined
                 return { ...emptyStats(gameId, pid), ...foulEntry }
               }
@@ -1363,8 +1366,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <div style={{fontSize:13, color:'#555', marginBottom:14}}>
               {foulAddModal.isHome ? 'チームA' : 'チームB'}　#{foulAddModal.playerNum}
             </div>
-            <div style={{display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, marginBottom:16}}>
-              {([['P','fouls_plain'],['P1','fouls_1ft'],['P2','fouls_2ft'],['P3','fouls_3ft'],['T','technical_fouls']] as [string, keyof OppFoulData][]).map(([label, key]) => (
+            <div style={{display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, marginBottom:16}}>
+              {([['P','fouls_plain'],['P1','fouls_1ft'],['P2','fouls_2ft'],['P3','fouls_3ft'],['T','technical_fouls'],['U','fouls_unsportsmanlike']] as [string, keyof OppFoulData][]).map(([label, key]) => (
                 <button key={key}
                   onClick={() => { onFoulEdit?.(foulAddModal.playerId, foulAddModal.isHome, 1, key); setFoulAddModal(null) }}
                   style={{padding:'10px 2px', borderRadius:6, border:'2px solid #c00', background:'#fff1f0', color:'#c00', fontWeight:'bold', fontSize:13, cursor:'pointer'}}
@@ -2238,15 +2241,16 @@ export default function GamePage() {
       const ov = ovRaw ? JSON.parse(ovRaw) : null
       if (ov?.oppPlayers) {
         const fm: Record<string, OppFoulData> = {}
-        for (const [k, v] of Object.entries(ov.oppPlayers as Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number }>)) {
+        for (const [k, v] of Object.entries(ov.oppPlayers as Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number; fouls_unsportsmanlike?: number }>)) {
           const entry: OppFoulData = {
             fouls_plain: v.fouls_plain ?? v.fouls ?? 0, // 旧データとの後方互換
             fouls_1ft: v.fouls_1ft ?? 0,
             fouls_2ft: v.fouls_2ft ?? 0,
             fouls_3ft: v.fouls_3ft ?? 0,
             technical_fouls: v.technical_fouls ?? 0,
+            fouls_unsportsmanlike: v.fouls_unsportsmanlike ?? 0,
           }
-          const total = entry.fouls_plain + entry.fouls_1ft + entry.fouls_2ft + entry.fouls_3ft + entry.technical_fouls
+          const total = entry.fouls_plain + entry.fouls_1ft + entry.fouls_2ft + entry.fouls_3ft + entry.technical_fouls + entry.fouls_unsportsmanlike
           if (total > 0) fm[k] = entry
         }
         if (Object.keys(fm).length > 0) setOppFoulsMap(fm)
@@ -2275,7 +2279,7 @@ export default function GamePage() {
 
   function recordFoulWithFT(playerId: string, ftCount: number) {
     // ftCount: -1=テクニカル(T), 0=なし(P), 1=1本(P1), 2=2本(P2), 3=3本(P3)
-    const foulKey: StatKey = ftCount === -1 ? 'technical_fouls' : ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
+    const foulKey: StatKey = ftCount === -2 ? 'fouls_unsportsmanlike' : ftCount === -1 ? 'technical_fouls' : ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
     const gid = ++gidRef.current
     // 退場検出（このファウルを加えた後の状態で判定：5ファウル / テクニカル2 等）
     const currentStat = getEffectiveStat(playerId)
@@ -2360,7 +2364,7 @@ export default function GamePage() {
           return removeAndAdjust(prev, idx)
         })
       }
-      const foulChange = group.find(c => ['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(c.key))
+      const foulChange = group.find(c => ['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls', 'fouls_unsportsmanlike'].includes(c.key))
       if (foulChange) {
         setTeamFouls(t => Math.max(0, t - 1))
         removeLastFoulEvent('us', foulChange.playerId, foulChange.key as keyof OppFoulData)
@@ -2574,8 +2578,9 @@ export default function GamePage() {
   }
 
   function recordOppFoulWithFT(playerKey: string, ftCount: number) {
-    // ftCount: 0=フリースローなし(P), 1=1本(P1), 2=2本(P2), 3=3本(P3), -1=テクニカル(T)
-    const field: keyof OppFoulData = ftCount < 0 ? 'technical_fouls'
+    // ftCount: 0=なし(P), 1=P1, 2=P2, 3=P3, -1=テクニカル(T), -2=アンスポ(U)
+    const field: keyof OppFoulData = ftCount === -2 ? 'fouls_unsportsmanlike'
+      : ftCount === -1 ? 'technical_fouls'
       : ftCount === 0 ? 'fouls_plain'
       : ftCount === 1 ? 'fouls_1ft'
       : ftCount === 2 ? 'fouls_2ft'
@@ -3522,7 +3527,8 @@ export default function GamePage() {
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 1)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー1本 (P1)</button>
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 2)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー2本 (P2)</button>
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 3)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー3本 (P3)</button>
-              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="col-span-2 bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカルファウル (T)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカル (T)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -2)} className="bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-3 font-semibold transition-all active:scale-95">アンスポ (U)</button>
             </div>
             <button onClick={() => setFoulOppDialog({ isOpen: false })} className="w-full mt-4 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all">キャンセル</button>
           </div>
@@ -3651,12 +3657,20 @@ export default function GamePage() {
                 フリースロー3本
               </button>
             </div>
-            <button
-              onClick={() => recordFoulWithFT(foulDialog.playerId!, -1)}
-              className="w-full mt-3 bg-orange-600/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
-            >
-              テクニカルファウル（T）
-            </button>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, -1)}
+                className="bg-orange-600/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                テクニカル（T）
+              </button>
+              <button
+                onClick={() => recordFoulWithFT(foulDialog.playerId!, -2)}
+                className="bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+              >
+                アンスポ（U）
+              </button>
+            </div>
             <button
               onClick={() => setFoulDialog({ isOpen: false })}
               className="w-full mt-3 bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-2 font-semibold transition-all"
