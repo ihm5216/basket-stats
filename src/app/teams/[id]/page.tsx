@@ -201,6 +201,33 @@ export default function TeamPage() {
         {/* 試合タブ */}
         {tab === 'games' && (
           <div>
+            {/* チーム種別（一般 / ミニバス）。タイムアウト規則・公式スコアシートが切替わる */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="text-xs text-[var(--muted)] flex-shrink-0">種別</span>
+              {(['general', 'mini'] as const).map(cat => {
+                const active = (team.category ?? 'general') === cat
+                return (
+                  <button
+                    key={cat}
+                    onClick={async () => {
+                      if (active) return
+                      const supabase = createClient()
+                      const { error } = await supabase.from('teams').update({ category: cat }).eq('id', id)
+                      if (!error) setTeam(prev => prev ? { ...prev, category: cat } : prev)
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+                    style={active
+                      ? { background: 'rgba(14,165,233,0.15)', borderColor: 'rgba(14,165,233,0.6)', color: '#38bdf8', fontWeight: 700 }
+                      : { background: 'var(--card)', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
+                  >
+                    {cat === 'general' ? '一般 / 中高' : 'ミニバス'}
+                  </button>
+                )
+              })}
+              <span className="text-[10px] text-[var(--muted)]">
+                （ミニバス＝タイムアウト各Q1回）
+              </span>
+            </div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold text-white">試合一覧</h2>
               <Link href={`/games/new?team=${id}`} className="btn-primary text-sm py-2 px-4">試合を登録</Link>

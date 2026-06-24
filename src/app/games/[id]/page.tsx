@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
-import { Game, Player, PlayerStat } from '@/types'
+import { Game, Player, PlayerStat, TeamCategory } from '@/types'
 import { calcPoints } from '@/lib/stats'
 import JBAOfficialSheet from './JBAOfficialSheet'
 
@@ -31,6 +31,18 @@ type AddEventRequest = {
   player_id?: string
 }
 type TimeoutRecord = { quarter: number; minute: number }
+
+/**
+ * そのクォーターで取れるタイムアウトの「集計範囲」と上限を返す（JBA）。
+ * - 一般: 前半(Q1-2)2回 / 後半(Q3-4)3回 / 各OT1回
+ * - ミニバス: 各クォーター1回（持ち越し不可） / 各OT1回
+ */
+function timeoutScope(category: TeamCategory, q: number): { label: string; quarters: number[]; limit: number } {
+  if (q >= 5) return { label: `OT${q - 4}`, quarters: [q], limit: 1 } // OTは両カテゴリとも各1回
+  if (category === 'mini') return { label: `Q${q}`, quarters: [q], limit: 1 } // ミニ: 各Q1回
+  if (q <= 2) return { label: '前半', quarters: [1, 2], limit: 2 }
+  return { label: '後半', quarters: [3, 4], limit: 3 }
+}
 // ファウル発生イベント（スコアシートのQ別チームファウル・前後半区切り線用）
 type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: keyof OppFoulData }
 
@@ -646,7 +658,7 @@ function foulLabel(t: keyof OppFoulData): string {
   return t === 'technical_fouls' ? 'T' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter, category = 'general' }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
@@ -661,6 +673,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   oppTimeoutRecords?: TimeoutRecord[]
   foulEvents?: FoulEvent[]
   currentQuarter?: number
+  category?: TeamCategory
 }) {
   // 進行中のQ（終了済みQのチームファウルやTO未使用マスの「消し込み」判定に使う）
   const curQ = game.is_finished ? 99 : (currentQuarter ?? game.quarter ?? 1)
@@ -820,18 +833,34 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   : crossed ? doubleLine(12) : <span style={{fontSize:9, lineHeight:1.2, color:'transparent'}}>0</span>}
               </span>
             )
+            const otBoxes = ots.length > 0 && (
+              <>
+                <span style={{fontSize:6, color:'#888', fontWeight:'bold', marginLeft:2}}>OT</span>
+                {ots.map((r, i) => box(r, false, 'o' + i))}
+              </>
+            )
+            // ミニバス: 各クォーター1回（Q別マス）
+            if (category === 'mini') {
+              return (
+                <>
+                  {[1, 2, 3, 4].map(q => (
+                    <span key={'mq' + q} style={{display:'inline-flex', flexDirection:'column', alignItems:'center'}}>
+                      <span style={{fontSize:6, color:'#888', lineHeight:1.1}}>Q{q}</span>
+                      {box(recs.find(r => r.quarter === q), curQ > q, 'mq' + q)}
+                    </span>
+                  ))}
+                  {otBoxes}
+                </>
+              )
+            }
+            // 一般: 前半2マス・後半3マス
             return (
               <>
                 <span style={{fontSize:6, color:'#888', fontWeight:'bold'}}>前</span>
                 {[0, 1].map(i => box(first[i], firstDone, 'f' + i))}
                 <span style={{fontSize:6, color:'#888', fontWeight:'bold', marginLeft:2}}>後</span>
                 {[0, 1, 2].map(i => box(second[i], secondDone, 's' + i))}
-                {ots.length > 0 && (
-                  <>
-                    <span style={{fontSize:6, color:'#888', fontWeight:'bold', marginLeft:2}}>OT</span>
-                    {ots.map((r, i) => box(r, false, 'o' + i))}
-                  </>
-                )}
+                {otBoxes}
               </>
             )
           })()}
@@ -1407,12 +1436,16 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onRenameOppPlayer?: (oppKey: string, newName: string, newNumber: string) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
-  // LINE共有用: チームの共有トークンを取得
+  // LINE共有用の共有トークン＋チーム種別（一般/ミニバス）を取得
   const [shareToken, setShareToken] = useState('')
+  const [category, setCategory] = useState<TeamCategory>('general')
   useEffect(() => {
     const supabase = createClient()
-    supabase.from('teams').select('share_token').eq('id', game.team_id).maybeSingle()
-      .then(({ data }) => { if (data?.share_token) setShareToken(data.share_token) })
+    supabase.from('teams').select('share_token, category').eq('id', game.team_id).maybeSingle()
+      .then(({ data }) => {
+        if (data?.share_token) setShareToken(data.share_token)
+        if (data?.category === 'mini' || data?.category === 'general') setCategory(data.category)
+      })
   }, [game.team_id])
   // court_data_json からタイムアウト記録を復元
   const homeTimeoutRecords: TimeoutRecord[] = (() => {
@@ -1639,6 +1672,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
             foulEvents={finishedFoulEvents}
+            category={category}
           />
         )}
       </div>
@@ -1805,6 +1839,7 @@ export default function GamePage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [game, setGame] = useState<Game | null>(null)
+  const [category, setCategory] = useState<TeamCategory>('general')  // チーム種別（一般/ミニバス）
   const [players, setPlayers] = useState<Player[]>([])
   const [statsMap, setStatsMap] = useState<Map<string, PlayerStat>>(new Map())
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
@@ -1891,6 +1926,14 @@ export default function GamePage() {
   }, [statsMap, pending, id])
 
   useEffect(() => { loadData() }, [id])
+
+  // チーム種別（一般/ミニバス）を取得：タイムアウト規則とスコアシート表示に使う
+  useEffect(() => {
+    if (!game?.team_id) return
+    const supabase = createClient()
+    supabase.from('teams').select('category').eq('id', game.team_id).maybeSingle()
+      .then(({ data }) => { if (data?.category === 'mini' || data?.category === 'general') setCategory(data.category) })
+  }, [game?.team_id])
 
   // gameRef / scoreEventsRef を常に最新に同期（saveStats のクロージャずれ対策）
   useEffect(() => { gameRef.current = game }, [game])
@@ -3077,13 +3120,9 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* 行4: タイムアウト（JBA: 前半2回 / 後半3回 / 各OT1回） */}
+        {/* 行4: タイムアウト（一般=前半2/後半3、ミニバス=各Q1、各OT1） */}
         {(() => {
-          const scope = currentQuarter <= 2
-            ? { label: '前半', quarters: [1, 2], limit: 2 }
-            : currentQuarter <= 4
-              ? { label: '後半', quarters: [3, 4], limit: 3 }
-              : { label: `OT${currentQuarter - 4}`, quarters: [currentQuarter], limit: 1 }
+          const scope = timeoutScope(category, currentQuarter)
           const inScope = (recs: TimeoutRecord[]) => recs.filter(r => scope.quarters.includes(r.quarter))
           const homeInScope = inScope(homeTimeoutRecords)
           const oppInScope = inScope(oppTimeoutRecords)
@@ -3168,6 +3207,7 @@ export default function GamePage() {
             onRenameOppPlayer={handleEditOppPlayer}
             foulEvents={foulEvents}
             currentQuarter={currentQuarter}
+            category={category}
             homeTimeoutRecords={homeTimeoutRecords}
             oppTimeoutRecords={oppTimeoutRecords}
           />

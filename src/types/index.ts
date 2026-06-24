@@ -7,11 +7,14 @@ export type Player = {
   created_at: string
 }
 
+export type TeamCategory = 'general' | 'mini'
+
 export type Team = {
   id: string
   user_id: string
   name: string
   share_token: string
+  category?: TeamCategory   // 'general'(一般/U15以上) | 'mini'(ミニバス/U12)。未設定は一般扱い
   created_at: string
 }
 
