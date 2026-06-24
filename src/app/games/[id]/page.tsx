@@ -100,6 +100,19 @@ function getTotalFouls(stat: PlayerStat): number {
   return (stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0)
 }
 
+/**
+ * 退場（失格含む）判定（JBA/FIBA）。
+ * - 個人ファウル合計が5
+ * - テクニカル2回
+ * - （将来）アンスポ2回 / テクニカル1+アンスポ1
+ * ※ unsportsmanlike 列はまだ無いので ?? 0 で安全に評価（追加後に自動で効く）。
+ */
+function isDisqualified(stat: PlayerStat): boolean {
+  const tech = stat.technical_fouls ?? 0
+  const unsp = (stat as { fouls_unsportsmanlike?: number }).fouls_unsportsmanlike ?? 0
+  return getTotalFouls(stat) >= 5 || tech >= 2 || unsp >= 2 || (tech >= 1 && unsp >= 1)
+}
+
 function getFoulNotation(stat: PlayerStat): string {
   const parts: string[] = []
   const plain = stat.fouls_plain ?? 0
@@ -1693,19 +1706,22 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 }
 
 // ─── スターター選択画面 ─────────────────────────────────────────────────────────
-function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds, initialOppKeys }: {
+function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds, initialOppKeys, disqualifiedIds = [] }: {
   players: Player[]
   oppPlayers: OppPlayer[]
   currentQuarter: number
   onConfirm: (homeIds: string[], oppKeys: string[]) => void
   initialIds: string[]
   initialOppKeys: string[]
+  disqualifiedIds?: string[]   // 退場済みの選手ID（コートに出せない）
 }) {
-  const [selected, setSelected] = useState<string[]>(initialIds.slice(0, 5))
+  const dq = new Set(disqualifiedIds)
+  const [selected, setSelected] = useState<string[]>(initialIds.filter(id => !dq.has(id)).slice(0, 5))
   const [selectedOpp, setSelectedOpp] = useState<string[]>(initialOppKeys.slice(0, 5))
   const [confirmError, setConfirmError] = useState('')
 
   function toggleHome(id: string) {
+    if (dq.has(id)) return  // 退場選手は選べない
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 5 ? [...prev, id] : prev)
     setConfirmError('')
   }
@@ -1738,10 +1754,10 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
     onConfirm(selected, selectedOpp)
   }
 
-  function PlayerRow({ id, number, name, isSelected, isDisabled, onToggle, color }: {
+  function PlayerRow({ id, number, name, isSelected, isDisabled, onToggle, color, badge }: {
     id: string; number: string; name: string
     isSelected: boolean; isDisabled: boolean
-    onToggle: () => void; color: 'orange' | 'blue'
+    onToggle: () => void; color: 'orange' | 'blue'; badge?: string
   }) {
     return (
       <button
@@ -1761,7 +1777,9 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
         }`}>{isSelected ? '✓' : ' '}</span>
         <span className={`font-bold w-10 ${color === 'orange' ? 'text-orange-400' : 'text-blue-400'}`}>#{number || '—'}</span>
         <span className={`font-medium ${isSelected ? 'text-white' : 'text-[var(--muted)]'}`}>{name}</span>
-        {isSelected && <span className={`ml-auto text-xs font-medium ${color === 'orange' ? 'text-orange-400' : 'text-blue-400'}`}>コート</span>}
+        {badge
+          ? <span className="ml-auto text-xs font-bold text-red-400">{badge}</span>
+          : isSelected && <span className={`ml-auto text-xs font-medium ${color === 'orange' ? 'text-orange-400' : 'text-blue-400'}`}>コート</span>}
       </button>
     )
   }
@@ -1808,7 +1826,8 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
             {players.map(p => (
               <PlayerRow key={p.id} id={p.id} number={p.number ?? ''} name={p.name}
                 isSelected={selected.includes(p.id)}
-                isDisabled={!selected.includes(p.id) && selected.length >= 5}
+                isDisabled={dq.has(p.id) || (!selected.includes(p.id) && selected.length >= 5)}
+                badge={dq.has(p.id) ? '退場' : undefined}
                 onToggle={() => toggleHome(p.id)} color="orange" />
             ))}
             {players.length === 0 && <p className="text-center py-4 text-[var(--muted)] text-sm">選手を登録してください</p>}
@@ -2258,10 +2277,10 @@ export default function GamePage() {
     // ftCount: -1=テクニカル(T), 0=なし(P), 1=1本(P1), 2=2本(P2), 3=3本(P3)
     const foulKey: StatKey = ftCount === -1 ? 'technical_fouls' : ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
     const gid = ++gidRef.current
-    // 5ファウルアウト検出（このファウルを加えた後の合計で判定）
+    // 退場検出（このファウルを加えた後の状態で判定：5ファウル / テクニカル2 等）
     const currentStat = getEffectiveStat(playerId)
-    const newTotal = getTotalFouls(currentStat) + 1
-    if (newTotal >= 5) {
+    const projected = { ...currentStat, [foulKey]: Number(currentStat[foulKey] ?? 0) + 1 } as PlayerStat
+    if (isDisqualified(projected)) {
       const p = players.find(pl => pl.id === playerId)
       if (p) setFoulOutAlert({ playerName: p.name, playerNumber: p.number })
     }
@@ -2276,7 +2295,7 @@ export default function GamePage() {
     if (!selectedPlayer) return
     // 退場選手は2P/3Pのみブロック（FTはファウルアウトした直後でも打てる）
     if ((btn.key === 'fg2_made' || btn.key === 'fg3_made') &&
-        getTotalFouls(getEffectiveStat(selectedPlayer.id)) >= 5) {
+        isDisqualified(getEffectiveStat(selectedPlayer.id))) {
       setSelectedPlayer(null)
       return
     }
@@ -2980,6 +2999,7 @@ export default function GamePage() {
         onConfirm={confirmCourt}
         initialIds={onCourtIds}
         initialOppKeys={oppCourtKeys}
+        disqualifiedIds={players.filter(p => isDisqualified(getEffectiveStat(p.id))).map(p => p.id)}
       />
     )
   }
@@ -3237,24 +3257,24 @@ export default function GamePage() {
               <div className="flex flex-col gap-1.5">
                 {onCourtPlayers.map(player => {
                   const pts = calcPoints(getEffectiveStat(player.id))
-                  const fouls = getTotalFouls(getEffectiveStat(player.id))
-                  const isFouledOut = fouls >= 5
+                  const isFouledOut = isDisqualified(getEffectiveStat(player.id))
                   const isSelected = selectedPlayer?.id === player.id
                   return (
                     <button
                       key={player.id}
-                      disabled={isFouledOut}
+                      disabled={isFouledOut && !subInPlayer}
                       onClick={() => {
-                        if (isFouledOut) return
+                        // 交代モード中はファウルアウト/退場した選手も「退く対象」としてタップ可能にする
                         if (subInPlayer) { substituteHome(player.id); return }
+                        if (isFouledOut) return
                         setSelectedPlayer(isSelected ? null : player)
                         setSelectedOppPlayer(null)
                         setSubInOppPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2.5 rounded-xl border transition-all active:scale-95 ${
-                        isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60 cursor-not-allowed'
+                        subInPlayer ? 'bg-orange-500/10 border-orange-400 border-dashed'
+                        : isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60 cursor-not-allowed'
                         : isSelected ? 'bg-orange-500 border-orange-500'
-                        : subInPlayer ? 'bg-orange-500/10 border-orange-400 border-dashed'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
@@ -3380,7 +3400,7 @@ export default function GamePage() {
                 <div className="text-[10px] text-orange-400 mb-1.5 uppercase tracking-wide">自チームベンチ</div>
                 <div className="flex flex-col gap-1.5">
                   {homeBench.length > 0 ? homeBench.map(p => {
-                    const benchFouledOut = getTotalFouls(getEffectiveStat(p.id)) >= 5
+                    const benchFouledOut = isDisqualified(getEffectiveStat(p.id))
                     return (
                     <button
                       key={p.id}
