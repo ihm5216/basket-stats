@@ -73,6 +73,27 @@ body {
   .card { padding: 1rem; }
 }
 
+/* ─── ランディングページ（ライト基調）専用 ─── */
+/* グローバルの .card / 配色を変えずにLPだけライト面を実現するための専用クラス */
+.card-lp {
+  background: #fff;
+  border: 1px solid #e6edf6;
+  border-radius: 18px;
+}
+.chip-lp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 13px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #fff;
+  color: #274764;
+  border: 1px solid #e1eaf6;
+}
+
 /* ─── フォームフィールド ─── */
 .input-field {
   background-color: #0d2235;
