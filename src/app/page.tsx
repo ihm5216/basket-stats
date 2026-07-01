@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import type { Viewport } from 'next'
 import { Zen_Kaku_Gothic_New } from 'next/font/google'
 
 // LP専用フォント（このページにスコープ。アプリ本体は既存のシステムフォントのまま）
@@ -9,6 +10,12 @@ const zenKaku = Zen_Kaku_Gothic_New({
   display: 'swap',
   preload: false,
 })
+
+// LPは明るいライト基調なので、モバイルのアドレスバー/ステータスバー色を白に上書きする
+// （アプリ本体のダーク #091929 は layout.tsx 側でそのまま維持される）
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
+}
 
 export default function Home() {
   return (
@@ -93,7 +100,7 @@ export default function Home() {
             className="relative w-full overflow-hidden"
             style={{ height: 210, borderRadius: 22, boxShadow: '0 20px 40px -22px rgba(31,111,235,.4)' }}
           >
-            <Image src="/hero-basketball.png" alt="試合中のプレー" fill className="object-cover" sizes="(max-width: 480px) 100vw, 480px" priority />
+            <Image src="/hero-basketball.jpg" alt="試合中のプレー" fill className="object-cover" sizes="(max-width: 480px) 100vw, 480px" priority />
           </div>
         </section>
 
