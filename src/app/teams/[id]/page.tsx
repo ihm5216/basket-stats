@@ -419,7 +419,8 @@ export default function TeamPage() {
                       <>
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <input
-                            className="input-field w-16 text-center text-orange-400 font-bold px-1 py-1.5 text-sm flex-shrink-0"
+                            className="input-field text-center text-orange-400 font-bold px-1 py-1.5 text-sm"
+                            style={{ width: '4rem', flexShrink: 0 }}
                             value={editingPlayer.number}
                             onChange={e => setEditingPlayer(prev => prev ? { ...prev, number: toHankaku(e.target.value) } : prev)}
                             inputMode="numeric"
@@ -427,7 +428,8 @@ export default function TeamPage() {
                             placeholder="#"
                           />
                           <input
-                            className="input-field flex-1 min-w-0 py-1.5 text-sm"
+                            className="input-field py-1.5 text-sm"
+                            style={{ flex: 1, minWidth: '6rem' }}
                             value={editingPlayer.name}
                             onChange={e => setEditingPlayer(prev => prev ? { ...prev, name: e.target.value } : prev)}
                             placeholder="選手名"
