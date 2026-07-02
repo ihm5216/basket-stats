@@ -26,6 +26,12 @@ export default function TeamPage() {
   const [newPlayerNumber, setNewPlayerNumber] = useState('')
   const [numberWarning, setNumberWarning] = useState(false)
   const [addingPlayer, setAddingPlayer] = useState(false)
+  const [addError, setAddError] = useState('')
+  // 削除確認モーダル（window.confirmはLINE内ブラウザ等で出ないことがあるため自前で表示）
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'player' | 'game'; id: string; label: string } | null>(null)
+  // 選手のインライン編集
+  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; number: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   // 写真登録
   const [extracting, setExtracting] = useState(false)
   const [extractProgress, setExtractProgress] = useState('')
@@ -57,9 +63,10 @@ export default function TeamPage() {
     if (!trimmedName) return
     // 同じ名前の選手が既にいる場合はエラー
     if (players.some(p => p.name === trimmedName)) {
-      alert(`「${trimmedName}」は既に登録されています。同じ名前の選手は登録できません。`)
+      setAddError(`「${trimmedName}」は既に登録されています。同じ名前の選手は登録できません。`)
       return
     }
+    setAddError('')
     setAddingPlayer(true)
     const supabase = createClient()
     const { data } = await supabase
@@ -121,20 +128,37 @@ export default function TeamPage() {
   }
 
   async function deletePlayer(playerId: string) {
-    if (!confirm('選手を削除しますか？記録されたスタッツも削除されます。')) return
     const supabase = createClient()
     await supabase.from('players').delete().eq('id', playerId)
     setPlayers(prev => prev.filter(p => p.id !== playerId))
   }
 
+  async function savePlayerEdit() {
+    if (!editingPlayer) return
+    const trimmedName = editingPlayer.name.trim()
+    if (!trimmedName) return
+    setSavingEdit(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('players')
+      .update({ name: trimmedName, number: toHankaku(editingPlayer.number) || editingPlayer.number.trim() })
+      .eq('id', editingPlayer.id)
+    if (!error) {
+      setPlayers(prev => prev
+        .map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, number: toHankaku(editingPlayer.number) || editingPlayer.number.trim() } : p)
+        .sort((a, b) => Number(a.number) - Number(b.number)))
+      setEditingPlayer(null)
+    }
+    setSavingEdit(false)
+  }
+
   async function deleteGame(gameId: string) {
-    if (!confirm('この試合を削除しますか？スタッツのデータもすべて削除されます。')) return
     const supabase = createClient()
     await supabase.from('player_stats').delete().eq('game_id', gameId)
     await supabase.from('games').delete().eq('id', gameId)
     setGames(prev => prev.filter(g => g.id !== gameId))
     // localStorage のキャッシュも削除
-    ;['pending', 'score_events', 'court', 'court_opp', 'scoresheet_ov'].forEach(k => {
+    ;['pending', 'score_events', 'court', 'court_opp', 'scoresheet_ov', 'undo_stack', 'foul_events', 'game_clock'].forEach(k => {
       localStorage.removeItem(`${k}_${gameId}`)
     })
     for (let q = 1; q <= 4; q++) {
@@ -148,8 +172,8 @@ export default function TeamPage() {
   function copyShareLink() {
     const url = `${window.location.origin}/share/${team?.share_token}`
     navigator.clipboard.writeText(url)
-    setShareMsg('コピーしました！')
-    setTimeout(() => setShareMsg(''), 2000)
+    setShareMsg('✓ コピーしました！')
+    setTimeout(() => setShareMsg(''), 3000)
   }
 
   async function handleExportCSV() {
@@ -257,7 +281,7 @@ export default function TeamPage() {
                       </div>
                     </Link>
                     <button
-                      onClick={() => deleteGame(game.id)}
+                      onClick={() => setConfirmDelete({ type: 'game', id: game.id, label: `vs ${game.opponent}（${format(new Date(game.game_date), 'M月d日', { locale: ja })}）` })}
                       className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg mr-2 text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm"
                       title="試合を削除"
                     >
@@ -370,7 +394,7 @@ export default function TeamPage() {
                   className="input-field flex-1 min-w-32"
                   placeholder="選手名"
                   value={newPlayerName}
-                  onChange={e => setNewPlayerName(e.target.value)}
+                  onChange={e => { setNewPlayerName(e.target.value); if (addError) setAddError('') }}
                   required
                 />
                 <button type="submit" disabled={addingPlayer} className="btn-primary py-2 px-4 text-sm whitespace-nowrap">
@@ -382,6 +406,7 @@ export default function TeamPage() {
               ) : (
                 <p className="text-xs" style={{color:'var(--muted)'}}>背番号は半角数字（例: 10）で入力してください</p>
               )}
+              {addError && <p className="text-xs text-red-400">⚠ {addError}</p>}
             </form>
 
             {players.length === 0 ? (
@@ -389,14 +414,58 @@ export default function TeamPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {players.map(player => (
-                  <div key={player.id} className="card flex items-center justify-between py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-orange-400 font-bold w-8 text-center">#{player.number || '—'}</span>
-                      <span className="text-white font-medium">{player.name}</span>
-                    </div>
-                    <button onClick={() => deletePlayer(player.id)} className="text-[var(--muted)] hover:text-red-400 text-sm transition-colors">
-                      削除
-                    </button>
+                  <div key={player.id} className="card flex items-center justify-between py-3 gap-2">
+                    {editingPlayer?.id === player.id ? (
+                      <>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <input
+                            className="input-field w-16 text-center text-orange-400 font-bold px-1 py-1.5 text-sm flex-shrink-0"
+                            value={editingPlayer.number}
+                            onChange={e => setEditingPlayer(prev => prev ? { ...prev, number: toHankaku(e.target.value) } : prev)}
+                            inputMode="numeric"
+                            maxLength={3}
+                            placeholder="#"
+                          />
+                          <input
+                            className="input-field flex-1 min-w-0 py-1.5 text-sm"
+                            value={editingPlayer.name}
+                            onChange={e => setEditingPlayer(prev => prev ? { ...prev, name: e.target.value } : prev)}
+                            placeholder="選手名"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={savePlayerEdit}
+                            disabled={savingEdit || !editingPlayer.name.trim()}
+                            className="btn-primary text-xs py-1.5 px-3"
+                          >
+                            {savingEdit ? '保存中...' : '保存'}
+                          </button>
+                          <button onClick={() => setEditingPlayer(null)} className="text-[var(--muted)] text-xs">キャンセル</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-orange-400 font-bold w-8 text-center flex-shrink-0">#{player.number || '—'}</span>
+                          <span className="text-white font-medium truncate">{player.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <button
+                            onClick={() => setEditingPlayer({ id: player.id, name: player.name, number: player.number ?? '' })}
+                            className="text-[var(--muted)] hover:text-orange-400 text-sm transition-colors"
+                          >
+                            編集
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete({ type: 'player', id: player.id, label: `#${player.number || '—'} ${player.name}` })}
+                            className="text-[var(--muted)] hover:text-red-400 text-sm transition-colors"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -409,6 +478,37 @@ export default function TeamPage() {
           <SeasonStatsTab teamId={id} games={games} />
         )}
       </main>
+
+      {/* 削除確認モーダル */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-2xl p-6 w-full max-w-xs shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-3">🗑️</div>
+            <h2 className="text-lg font-bold text-white mb-1">
+              {confirmDelete.type === 'player' ? '選手を削除しますか？' : 'この試合を削除しますか？'}
+            </h2>
+            <p className="text-white font-bold text-sm mb-1 truncate">{confirmDelete.label}</p>
+            <p className="text-sm text-[var(--muted)] mb-5">
+              {confirmDelete.type === 'player' ? '記録されたスタッツも削除されます' : 'スタッツのデータもすべて削除されます'}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  if (confirmDelete.type === 'player') deletePlayer(confirmDelete.id)
+                  else deleteGame(confirmDelete.id)
+                  setConfirmDelete(null)
+                }}
+                className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-xl py-3 font-bold transition-all active:scale-95"
+              >
+                削除する
+              </button>
+              <button onClick={() => setConfirmDelete(null)} className="w-full btn-secondary rounded-xl py-3 font-bold">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -485,6 +585,9 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
       </div>
       <h2 className="font-semibold text-white mb-4">
         シーズン統計（{filteredGames.length}試合）
+        {filteredGames.some(g => !g.is_finished) && (
+          <span className="ml-2 text-xs font-normal text-[var(--muted)]">※進行中の試合を含む（共有ページの統計は終了試合のみ）</span>
+        )}
       </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">

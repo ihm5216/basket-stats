@@ -1721,7 +1721,13 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
 }) {
   const dq = new Set(disqualifiedIds)
   const oppDq = new Set(disqualifiedOppKeys)
-  const [selected, setSelected] = useState<string[]>(initialIds.filter(id => !dq.has(id)).slice(0, 5))
+  const [selected, setSelected] = useState<string[]>(() => {
+    const initial = initialIds.filter(id => !dq.has(id)).slice(0, 5)
+    if (initial.length > 0) return initial
+    // 出場可能な選手がちょうど5人なら自動で全員選択（登録5人チームの手間を省く）
+    const available = players.filter(p => !dq.has(p.id))
+    return available.length === 5 ? available.map(p => p.id) : initial
+  })
   const [selectedOpp, setSelectedOpp] = useState<string[]>(initialOppKeys.filter(k => !oppDq.has(k)).slice(0, 5))
   const [confirmError, setConfirmError] = useState('')
 
@@ -1894,6 +1900,7 @@ export default function GamePage() {
   const gameRef = useRef<Game | null>(null)
   const scoreEventsRef = useRef<ScoreEvent[]>([])
   const [undoStack, setUndoStack] = useState<PendingChange[][]>([])
+  const undoRestoredRef = useRef(false) // loadDataでの復元完了までlocalStorage書き込みを抑止
   const [subInPlayer, setSubInPlayer] = useState<Player | null>(null)
   const [subInOppPlayer, setSubInOppPlayer] = useState<OppPlayer | null>(null)
   const [showQScore, setShowQScore] = useState<number | null>(null)
@@ -1904,6 +1911,8 @@ export default function GamePage() {
   const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, OppFoulData>>({})
   // 5ファウルアウト通知
   const [foulOutAlert, setFoulOutAlert] = useState<{ playerName: string; playerNumber: string } | null>(null)
+  // 試合終了の確認モーダル（window.confirmはLINE内ブラウザ等で表示されないことがあるため自前で出す）
+  const [confirmFinish, setConfirmFinish] = useState(false)
   // ペイウォール（3試合無料制限）
   const [showPaywall, setShowPaywall] = useState(false)
   // ゲームクロック（10分 = 600秒）
@@ -2040,6 +2049,8 @@ export default function GamePage() {
   }, [loading, pending.length, scoreEvents, statsMap])
 
   useEffect(() => {
+    // 初回レンダー時は書き込まない（loadDataで復元する前に空配列で上書きしてしまうため）
+    if (!undoRestoredRef.current) return
     localStorage.setItem(`undo_stack_${id}`, JSON.stringify(undoStack))
   }, [undoStack, id])
 
@@ -2172,6 +2183,7 @@ export default function GamePage() {
     if (savedUndo) {
       try { setUndoStack(JSON.parse(savedUndo)) } catch { /* ignore */ }
     }
+    undoRestoredRef.current = true
 
     // 相手チーム選手を読み込む（localStorage優先、なければSupabaseから復元）
     const savedOpp = localStorage.getItem(`game_${id}_opponent_players`)
@@ -2889,6 +2901,32 @@ export default function GamePage() {
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current) }
   }, [timerActive])
 
+  // ゲームクロックの復元（スマホのスリープ復帰・リロードでタイマーが消えないように）
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`game_clock_${id}`)
+      if (!saved) return
+      const { seconds, active, updatedAt } = JSON.parse(saved) as { seconds?: number; active?: boolean; updatedAt?: number }
+      if (typeof seconds !== 'number') return
+      let s = seconds
+      if (active) {
+        // 稼働中だった場合は離脱していた時間ぶんを差し引いて再開
+        const elapsed = Math.floor((Date.now() - (updatedAt ?? Date.now())) / 1000)
+        s = Math.max(0, seconds - elapsed)
+      }
+      setTimerSeconds(s)
+      setTimerActive(Boolean(active) && s > 0)
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // ゲームクロックの保存
+  useEffect(() => {
+    try {
+      localStorage.setItem(`game_clock_${id}`, JSON.stringify({ seconds: timerSeconds, active: timerActive, updatedAt: Date.now() }))
+    } catch { /* ignore */ }
+  }, [timerSeconds, timerActive, id])
+
   function formatTimer(s: number) {
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
   }
@@ -2916,6 +2954,7 @@ export default function GamePage() {
     const next = qConfirmPending
     setCurrentQuarter(next)
     setQConfirmPending(null)
+    setRecordingTab('record') // 確認が終わったら次Qの記録タブへ自動で戻す
     const supabase = createClient()
     await supabase.from('games').update({ quarter: next }).eq('id', id)
     setCourtSetupMode(true)
@@ -2923,8 +2962,6 @@ export default function GamePage() {
   }
 
   async function finishGame() {
-    if (!confirm('試合を終了しますか？')) return
-
     // ── 3試合無料制限チェック ──────────────────────────────────
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -3011,6 +3048,7 @@ export default function GamePage() {
     localStorage.removeItem(`undo_stack_${id}`)
     localStorage.removeItem(`score_events_${id}`)
     localStorage.removeItem(`pending_${id}`)
+    localStorage.removeItem(`game_clock_${id}`)
   }
 
   if (loading) return (
@@ -3087,7 +3125,7 @@ export default function GamePage() {
               <button
                 onClick={() => setTimerActive(a => !a)}
                 className={`text-[10px] font-bold tabular-nums px-2 py-1 rounded-full border transition-colors ${
-                  timerActive ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                  timerActive ? 'bg-orange-500/20 border-orange-500 text-orange-400 animate-pulse'
                   : timerSeconds === 0 ? 'bg-red-500/20 border-red-500/50 text-red-400'
                   : 'bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)]'
                 }`}
@@ -3155,7 +3193,9 @@ export default function GamePage() {
           <div className="flex items-center gap-1.5">
             <button onClick={() => updateOpponentScore(-1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">-</button>
             <span className="text-xs text-[var(--muted)] w-14 text-center">相手 {game.opponent_score}</span>
-            <button onClick={() => updateOpponentScore(1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+</button>
+            <button onClick={() => updateOpponentScore(1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+1</button>
+            <button onClick={() => updateOpponentScore(2)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+2</button>
+            <button onClick={() => updateOpponentScore(3)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+3</button>
           </div>
           <div className="flex gap-1.5 items-center">
             <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
@@ -3289,8 +3329,10 @@ export default function GamePage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 {onCourtPlayers.map(player => {
-                  const pts = calcPoints(getEffectiveStat(player.id))
-                  const isFouledOut = isDisqualified(getEffectiveStat(player.id))
+                  const effStat = getEffectiveStat(player.id)
+                  const pts = calcPoints(effStat)
+                  const foulCount = getTotalFouls(effStat)
+                  const isFouledOut = isDisqualified(effStat)
                   const isSelected = selectedPlayer?.id === player.id
                   return (
                     <button
@@ -3315,7 +3357,14 @@ export default function GamePage() {
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
                       {isFouledOut
                         ? <span className="text-[9px] text-red-400 font-bold flex-shrink-0 ml-1">退場</span>
-                        : <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">{subInPlayer ? '↕' : `${pts}p`}</span>
+                        : subInPlayer
+                          ? <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">↕</span>
+                          : <span className="text-[10px] flex-shrink-0 ml-1 flex items-center gap-1">
+                              <span className="text-[var(--muted)]">{pts}p</span>
+                              {foulCount > 0 && (
+                                <span className={`font-bold ${foulCount >= 4 ? 'text-red-400' : 'text-[var(--muted)]'}`}>{foulCount}F</span>
+                              )}
+                            </span>
                       }
                     </button>
                   )
@@ -3334,6 +3383,8 @@ export default function GamePage() {
                   const isSelected = selectedOppPlayer?.key === player.key
                   const isFouledOut = isOppDisqualified(player.key)
                   const oppScore = getOppPlayerScore(scoreEvents, `#${player.number} ${player.name}`)
+                  const oppFoulData = oppFoulsMap[player.key]
+                  const oppFoulCount = oppFoulData ? getTotalFouls(oppFoulData as unknown as PlayerStat) : 0
                   return (
                     <button
                       key={player.key}
@@ -3357,7 +3408,14 @@ export default function GamePage() {
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
                       {isFouledOut
                         ? <span className="text-[9px] text-red-400 font-bold flex-shrink-0 ml-1">退場</span>
-                        : <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">{subInOppPlayer ? '↕' : oppScore > 0 ? `${oppScore}p` : ''}</span>
+                        : subInOppPlayer
+                          ? <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">↕</span>
+                          : <span className="text-[10px] flex-shrink-0 ml-1 flex items-center gap-1">
+                              {oppScore > 0 && <span className="text-[var(--muted)]">{oppScore}p</span>}
+                              {oppFoulCount > 0 && (
+                                <span className={`font-bold ${oppFoulCount >= 4 ? 'text-red-400' : 'text-[var(--muted)]'}`}>{oppFoulCount}F</span>
+                              )}
+                            </span>
                       }
                     </button>
                   )
@@ -3524,7 +3582,7 @@ export default function GamePage() {
             {/* Q4以降は「試合終了」を大きく中央寄りに、OTを右端に小さく配置 */}
             {!game.is_finished && (
               <button
-                onClick={finishGame}
+                onClick={() => setConfirmFinish(true)}
                 className={`btn-secondary text-sm py-2.5 text-red-400 border-red-400/30 ${currentQuarter >= 4 ? 'flex-1' : 'px-4'}`}
               >
                 試合終了
@@ -3644,6 +3702,31 @@ export default function GamePage() {
       )}
 
       {/* 5ファウルアウト通知 */}
+      {/* 試合終了の確認モーダル */}
+      {confirmFinish && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setConfirmFinish(false)}>
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-2xl p-6 w-72 shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-4xl mb-3">🏀</div>
+            <h2 className="text-lg font-bold text-white mb-1">試合を終了しますか？</h2>
+            <p className="text-sm text-[var(--muted)] mb-5">終了するとスコアシートが確定します</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setConfirmFinish(false); finishGame() }}
+                className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-xl py-3 font-bold transition-all active:scale-95"
+              >
+                試合終了する
+              </button>
+              <button
+                onClick={() => setConfirmFinish(false)}
+                className="w-full btn-secondary rounded-xl py-3 font-bold"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {foulOutAlert && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setFoulOutAlert(null)}>
           <div className="bg-[var(--card)] border border-red-500/50 rounded-2xl p-6 w-72 shadow-2xl text-center" onClick={e => e.stopPropagation()}>

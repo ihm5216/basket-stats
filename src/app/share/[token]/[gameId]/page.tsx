@@ -2,6 +2,10 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notFound } from 'next/navigation'
 import { Game, Player, PlayerStat } from '@/types'
 import GameShareView from './GameShareView'
+import AutoRefresh from '../../AutoRefresh'
+
+// 進行中試合のライブ閲覧に対応するため常に最新データを取得する
+export const dynamic = 'force-dynamic'
 
 // 共有リンク（チームのshare_token）経由で1試合のスコアシートを公開表示する
 export default async function SharedGamePage({ params }: { params: Promise<{ token: string; gameId: string }> }) {
@@ -45,12 +49,15 @@ export default async function SharedGamePage({ params }: { params: Promise<{ tok
     : allPlayers
 
   return (
-    <GameShareView
-      token={token}
-      teamName={team.name as string}
-      game={game as Game}
-      players={players}
-      stats={(stats ?? []) as PlayerStat[]}
-    />
+    <>
+      {!game.is_finished && <AutoRefresh />}
+      <GameShareView
+        token={token}
+        teamName={team.name as string}
+        game={game as Game}
+        players={players}
+        stats={(stats ?? []) as PlayerStat[]}
+      />
+    </>
   )
 }

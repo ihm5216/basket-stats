@@ -52,7 +52,14 @@ export default function GameShareView({ token, teamName, game, players, stats }:
               </div>
               <div className="text-3xl font-bold text-white">
                 {ourScore} <span className="text-xl" style={{ color: 'var(--muted)' }}>-</span> {game.opponent_score}
-                <span className={`ml-3 text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>{won ? '勝利' : ourScore < game.opponent_score ? '敗北' : '引き分け'}</span>
+                {game.is_finished ? (
+                  <span className={`ml-3 text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>{won ? '勝利' : ourScore < game.opponent_score ? '敗北' : '引き分け'}</span>
+                ) : (
+                  <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/30 rounded-full px-2.5 py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    進行中
+                  </span>
+                )}
               </div>
             </div>
             <button
