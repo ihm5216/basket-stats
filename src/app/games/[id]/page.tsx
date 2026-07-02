@@ -1709,18 +1709,20 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 }
 
 // ─── スターター選択画面 ─────────────────────────────────────────────────────────
-function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds, initialOppKeys, disqualifiedIds = [] }: {
+function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds, initialOppKeys, disqualifiedIds = [], disqualifiedOppKeys = [] }: {
   players: Player[]
   oppPlayers: OppPlayer[]
   currentQuarter: number
   onConfirm: (homeIds: string[], oppKeys: string[]) => void
   initialIds: string[]
   initialOppKeys: string[]
-  disqualifiedIds?: string[]   // 退場済みの選手ID（コートに出せない）
+  disqualifiedIds?: string[]      // 退場済みの選手ID（コートに出せない）
+  disqualifiedOppKeys?: string[]  // 退場済みの相手選手キー（コートに出せない）
 }) {
   const dq = new Set(disqualifiedIds)
+  const oppDq = new Set(disqualifiedOppKeys)
   const [selected, setSelected] = useState<string[]>(initialIds.filter(id => !dq.has(id)).slice(0, 5))
-  const [selectedOpp, setSelectedOpp] = useState<string[]>(initialOppKeys.slice(0, 5))
+  const [selectedOpp, setSelectedOpp] = useState<string[]>(initialOppKeys.filter(k => !oppDq.has(k)).slice(0, 5))
   const [confirmError, setConfirmError] = useState('')
 
   function toggleHome(id: string) {
@@ -1729,6 +1731,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
     setConfirmError('')
   }
   function toggleOpp(key: string) {
+    if (oppDq.has(key)) return  // 退場した相手選手は選べない
     setSelectedOpp(prev => prev.includes(key) ? prev.filter(x => x !== key) : prev.length < 5 ? [...prev, key] : prev)
   }
 
@@ -1747,8 +1750,9 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
       return
     }
     // 相手チームのスターターも選ぶよう促す（相手を登録している場合）
-    // 相手選手が5人未満しか登録されていない場合は登録人数ぶんでOK
-    const oppNeeded = Math.min(5, oppPlayers.length)
+    // 相手選手が5人未満しか登録されていない場合は登録人数ぶんでOK（退場選手は除外）
+    const oppAvailable = oppPlayers.filter(p => !oppDq.has(p.key)).length
+    const oppNeeded = Math.min(5, oppAvailable)
     if (oppPlayers.length > 0 && selectedOpp.length < oppNeeded) {
       setConfirmError(`相手チームのスターターを${oppNeeded}人選んでください（現在${selectedOpp.length}人）`)
       return
@@ -1796,7 +1800,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
             <div className="text-xs text-[var(--muted)]">
               自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>
               {oppPlayers.length > 0 && (() => {
-                const oppNeeded = Math.min(5, oppPlayers.length)
+                const oppNeeded = Math.min(5, oppPlayers.filter(p => !oppDq.has(p.key)).length)
                 return <>　相手 <span className={selectedOpp.length >= oppNeeded ? 'text-green-400 font-bold' : 'text-blue-400 font-bold'}>{selectedOpp.length}/{oppNeeded}</span></>
               })()}
             </div>
@@ -1845,7 +1849,8 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
               {oppPlayers.map(p => (
                 <PlayerRow key={p.key} id={p.key} number={p.number} name={p.name}
                   isSelected={selectedOpp.includes(p.key)}
-                  isDisabled={!selectedOpp.includes(p.key) && selectedOpp.length >= 5}
+                  isDisabled={oppDq.has(p.key) || (!selectedOpp.includes(p.key) && selectedOpp.length >= 5)}
+                  badge={oppDq.has(p.key) ? '退場' : undefined}
                   onToggle={() => toggleOpp(p.key)} color="blue" />
               ))}
             </div>
@@ -2277,6 +2282,12 @@ export default function GamePage() {
     return applied as unknown as PlayerStat
   }
 
+  // 相手選手の退場（失格含む）判定。自チームと同じ JBA/FIBA ルール（5ファウル/T2/U2/T1+U1）を適用。
+  function isOppDisqualified(oppKey: string): boolean {
+    const f = oppFoulsMap[oppKey]
+    return f ? isDisqualified(f as unknown as PlayerStat) : false
+  }
+
   function recordFoulWithFT(playerId: string, ftCount: number) {
     // ftCount: -1=テクニカル(T), 0=なし(P), 1=1本(P1), 2=2本(P2), 3=3本(P3)
     const foulKey: StatKey = ftCount === -2 ? 'fouls_unsportsmanlike' : ftCount === -1 ? 'technical_fouls' : ftCount === 0 ? 'fouls_plain' : ftCount === 1 ? 'fouls_1ft' : ftCount === 2 ? 'fouls_2ft' : 'fouls_3ft'
@@ -2551,6 +2562,15 @@ export default function GamePage() {
       else removeLastFoulEvent('us', playerId, foulType)
     } else {
       // 相手チーム: oppFoulsMapを更新してlocalStorageにも保存
+      // 退場検出（加算後に5ファウル/T2/U2 等へ到達したらアラート）
+      if (delta > 0) {
+        const currentFouls = oppFoulsMap[playerId] ?? emptyOppFoul()
+        const projected: OppFoulData = { ...currentFouls, [foulType]: currentFouls[foulType] + 1 }
+        if (isDisqualified(projected as unknown as PlayerStat) && !isDisqualified(currentFouls as unknown as PlayerStat)) {
+          const op = oppPlayerList.find(p => p.key === playerId)
+          if (op) setFoulOutAlert({ playerName: op.name, playerNumber: op.number })
+        }
+      }
       setOppTeamFouls(prev => Math.max(0, prev + delta))
       if (delta > 0) pushFoulEvent('opponent', playerId, foulType)
       else removeLastFoulEvent('opponent', playerId, foulType)
@@ -2585,6 +2605,13 @@ export default function GamePage() {
       : ftCount === 1 ? 'fouls_1ft'
       : ftCount === 2 ? 'fouls_2ft'
       : 'fouls_3ft'
+    // 退場検出（このファウルを加えた後の状態で判定：5ファウル / テクニカル2 / アンスポ2 等）
+    const currentFouls = oppFoulsMap[playerKey] ?? emptyOppFoul()
+    const projected: OppFoulData = { ...currentFouls, [field]: currentFouls[field] + 1 }
+    if (isDisqualified(projected as unknown as PlayerStat)) {
+      const op = oppPlayerList.find(p => p.key === playerKey)
+      if (op) setFoulOutAlert({ playerName: op.name, playerNumber: op.number })
+    }
     setOppTeamFouls(prev => prev + 1)
     pushFoulEvent('opponent', playerKey, field)
     setOppFoulsMap(prev => {
@@ -3005,6 +3032,7 @@ export default function GamePage() {
         initialIds={onCourtIds}
         initialOppKeys={oppCourtKeys}
         disqualifiedIds={players.filter(p => isDisqualified(getEffectiveStat(p.id))).map(p => p.id)}
+        disqualifiedOppKeys={oppPlayerList.filter(p => isOppDisqualified(p.key)).map(p => p.key)}
       />
     )
   }
@@ -3304,27 +3332,33 @@ export default function GamePage() {
               <div className="flex flex-col gap-1.5">
                 {oppOnCourt.map(player => {
                   const isSelected = selectedOppPlayer?.key === player.key
+                  const isFouledOut = isOppDisqualified(player.key)
                   const oppScore = getOppPlayerScore(scoreEvents, `#${player.number} ${player.name}`)
                   return (
                     <button
                       key={player.key}
+                      disabled={isFouledOut && !subInOppPlayer}
                       onClick={() => {
+                        // 交代モード中は退場した選手も「退く対象」としてタップ可能にする
                         if (subInOppPlayer) { substituteOpp(player.key); return }
+                        if (isFouledOut) return
                         setSelectedOppPlayer(isSelected ? null : player)
                         setSelectedPlayer(null)
                         setSubInPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2.5 rounded-xl border transition-all active:scale-95 ${
-                        isSelected ? 'bg-blue-500 border-blue-500'
-                        : subInOppPlayer ? 'bg-blue-500/10 border-blue-400 border-dashed'
+                        subInOppPlayer ? 'bg-blue-500/10 border-blue-400 border-dashed'
+                        : isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60 cursor-not-allowed'
+                        : isSelected ? 'bg-blue-500 border-blue-500'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className="text-[10px] text-blue-300 font-bold flex-shrink-0 w-8">#{player.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${isFouledOut ? 'text-red-400' : 'text-blue-300'}`}>#{player.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
-                      <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">
-                        {subInOppPlayer ? '↕' : oppScore > 0 ? `${oppScore}p` : ''}
-                      </span>
+                      {isFouledOut
+                        ? <span className="text-[9px] text-red-400 font-bold flex-shrink-0 ml-1">退場</span>
+                        : <span className="text-[10px] text-[var(--muted)] flex-shrink-0 ml-1">{subInOppPlayer ? '↕' : oppScore > 0 ? `${oppScore}p` : ''}</span>
+                      }
                     </button>
                   )
                 })}
@@ -3437,24 +3471,33 @@ export default function GamePage() {
               <div>
                 <div className="text-[10px] text-blue-400 mb-1.5 uppercase tracking-wide">相手ベンチ</div>
                 <div className="flex flex-col gap-1.5">
-                  {oppBench.length > 0 ? oppBench.map(p => (
+                  {oppBench.length > 0 ? oppBench.map(p => {
+                    const benchFouledOut = isOppDisqualified(p.key)
+                    return (
                     <button
                       key={p.key}
+                      disabled={benchFouledOut}
                       onClick={() => {
+                        if (benchFouledOut) return
                         setSubInOppPlayer(subInOppPlayer?.key === p.key ? null : p)
                         setSubInPlayer(null)
                         setSelectedPlayer(null)
                         setSelectedOppPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2 rounded-lg border text-left transition-all active:scale-95 ${
-                        subInOppPlayer?.key === p.key ? 'bg-blue-500/20 border-blue-500' : 'bg-[var(--card)] border-[var(--card-border)]'
+                        benchFouledOut ? 'opacity-30 cursor-not-allowed bg-red-500/10 border-red-500/20'
+                        : subInOppPlayer?.key === p.key ? 'bg-blue-500/20 border-blue-500'
+                        : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className="text-[10px] text-blue-300 font-bold flex-shrink-0 w-8">#{p.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${benchFouledOut ? 'text-red-400' : 'text-blue-300'}`}>#{p.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1">{p.name}</span>
-                      {subInOppPlayer?.key === p.key && <span className="ml-auto text-[9px] text-blue-400 flex-shrink-0">IN</span>}
+                      {benchFouledOut
+                        ? <span className="ml-auto text-[9px] text-red-400 flex-shrink-0">退場</span>
+                        : subInOppPlayer?.key === p.key && <span className="ml-auto text-[9px] text-blue-400 flex-shrink-0">IN</span>}
                     </button>
-                  )) : <p className="text-[10px] text-[var(--muted)] py-1">なし</p>}
+                    )
+                  }) : <p className="text-[10px] text-[var(--muted)] py-1">なし</p>}
                 </div>
               </div>
             </div>
