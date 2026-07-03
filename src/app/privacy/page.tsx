@@ -54,8 +54,8 @@ const sections: { title: string; body: string[] }[] = [
   {
     title: '8. お問い合わせ窓口',
     body: [
-      // TODO: 有料プラン開始前に事業者氏名（妻名義）とサポート用メールを記入すること
-      '事業者・メールアドレス：準備中（有料プラン提供開始までに記載します）',
+      '事業者：貝阿弥 歩美',
+      'メールアドレス：basketstats.jp@gmail.com',
     ],
   },
   {
