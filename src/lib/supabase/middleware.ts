@@ -39,6 +39,8 @@ export async function updateSession(request: NextRequest) {
   const isPublicPath = publicPaths.some(p => pathname === p || pathname.startsWith('/share/'))
     || pathname.startsWith('/api/auth/')
     || pathname.startsWith('/auth/')
+    // Stripe Webhookは認証Cookieを持たない外部からのPOST。署名検証(STRIPE_WEBHOOK_SECRET)で保護される
+    || pathname === '/api/stripe/webhook'
 
   if (!user && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', request.url))
