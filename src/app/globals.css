@@ -164,7 +164,7 @@ body {
 @media print {
   @page { size: A4 portrait; margin: 6mm; }
   body { background: white !important; color: black !important; }
-  .print\\:hidden { display: none !important; }
+  /* print:hidden はTailwindが生成するユーティリティに任せる（手書きの \: エスケープはPostCSS変換で壊れるため書かない） */
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   /* 公式スコアシートのみを印刷する */

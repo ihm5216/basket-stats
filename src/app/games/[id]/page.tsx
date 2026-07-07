@@ -43,6 +43,16 @@ function timeoutScope(category: TeamCategory, q: number): { label: string; quart
   if (q <= 2) return { label: '前半', quarters: [1, 2], limit: 2 }
   return { label: '後半', quarters: [3, 4], limit: 3 }
 }
+
+/**
+ * クォーター/OTの時間（秒）。
+ * - 一般: 10分 / OT5分
+ * - ミニバス: 6分 / OT3分
+ */
+function quarterSeconds(category: TeamCategory, q: number): number {
+  if (category === 'mini') return q >= 5 ? 180 : 360
+  return q >= 5 ? 300 : 600
+}
 // ファウル発生イベント（スコアシートのQ別チームファウル・前後半区切り線用）
 type FoulEvent = { quarter: number; team: 'us' | 'opponent'; key: string; foulType: keyof OppFoulData }
 
@@ -1316,7 +1326,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <div style={{marginBottom:16}}>
               <div style={{fontSize:11, fontWeight:'bold', color:'#555', marginBottom:4}}>種別（得点）</div>
               <div style={{display:'flex', gap:6}}>
-                {([2,3,1] as const).map(pts => (
+                {([2,3,1] as const).filter(pts => category !== 'mini' || pts !== 3).map(pts => (
                   <button key={pts} onClick={() => setAddPoints(pts)} style={{flex:1, padding:'6px', borderRadius:6, border:'2px solid', borderColor: addPoints===pts ? '#0ea5e9' : '#ccc', background: addPoints===pts ? '#e0f2fe' : '#f5f5f5', fontWeight: addPoints===pts ? 'bold' : 'normal', cursor:'pointer', fontSize:12}}>
                     {pts === 1 ? 'FT（1点）' : pts === 2 ? '2P（2点）' : '3P（3点）'}
                   </button>
@@ -1970,6 +1980,13 @@ export default function GamePage() {
     supabase.from('teams').select('category').eq('id', game.team_id).maybeSingle()
       .then(({ data }) => { if (data?.category === 'mini' || data?.category === 'general') setCategory(data.category) })
   }, [game?.team_id])
+
+  // ミニバスは6分クォーター：クロックが未操作（一般の初期値のまま停止中）なら6分に切替
+  useEffect(() => {
+    if (category !== 'mini') return
+    setTimerSeconds(s => (!timerActive && s === 600 ? 360 : s))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category])
 
   // gameRef / scoreEventsRef を常に最新に同期（saveStats のクロージャずれ対策）
   useEffect(() => { gameRef.current = game }, [game])
@@ -2940,9 +2957,9 @@ export default function GamePage() {
       setOppTeamFouls(0)
     }
     // タイムアウトの残数はスコアシート記録から都度算出するためリセット不要
-    // タイマーをリセット（OT=第5Q以降は一般ルールの5分、通常Qは10分）
+    // タイマーをリセット（一般=10分/OT5分、ミニバス=6分/OT3分）
     setTimerActive(false)
-    setTimerSeconds(currentQuarter + 1 >= 5 ? 300 : 600)
+    setTimerSeconds(quarterSeconds(category, currentQuarter + 1))
     setRecordingTab('scoresheet')
     setUndoStack([])
     localStorage.removeItem(`undo_stack_${id}`)
@@ -3133,7 +3150,7 @@ export default function GamePage() {
                 {timerActive ? '⏸' : '▶'} {formatTimer(timerSeconds)}
               </button>
               <button
-                onClick={() => { setTimerActive(false); setTimerSeconds(currentQuarter >= 5 ? 300 : 600) }}
+                onClick={() => { setTimerActive(false); setTimerSeconds(quarterSeconds(category, currentQuarter)) }}
                 className="text-[10px] text-[var(--muted)] px-1"
                 title="タイマーリセット"
               >↺</button>
@@ -3195,7 +3212,9 @@ export default function GamePage() {
             <span className="text-xs text-[var(--muted)] w-14 text-center">相手 {game.opponent_score}</span>
             <button onClick={() => updateOpponentScore(1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+1</button>
             <button onClick={() => updateOpponentScore(2)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+2</button>
-            <button onClick={() => updateOpponentScore(3)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+3</button>
+            {category !== 'mini' && (
+              <button onClick={() => updateOpponentScore(3)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+3</button>
+            )}
           </div>
           <div className="flex gap-1.5 items-center">
             <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
@@ -3455,7 +3474,8 @@ export default function GamePage() {
           {/* スタッツ入力 / 相手得点ボタン */}
           {selectedPlayer ? (
             <div className="grid grid-cols-3 gap-2">
-              {STAT_BUTTONS.map(btn => (
+              {/* ミニバス（U12）は3Pシュートなし */}
+              {STAT_BUTTONS.filter(btn => category !== 'mini' || (btn.key !== 'fg3_made' && btn.key !== 'fg3_attempt')).map(btn => (
                 <button key={btn.key + btn.label} onClick={() => handleStatTap(btn)} className={`stat-btn ${btn.category}`}>
                   <span>{btn.label}</span>
                 </button>
@@ -3464,7 +3484,7 @@ export default function GamePage() {
           ) : selectedOppPlayer ? (
             <div className="space-y-2">
               <div className="flex gap-3">
-                {([1, 2, 3] as const).map(pts => (
+                {([1, 2, 3] as const).filter(pts => category !== 'mini' || pts !== 3).map(pts => (
                   <button
                     key={pts}
                     onClick={() => updateOpponentScore(pts, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}
@@ -3677,7 +3697,7 @@ export default function GamePage() {
             </h2>
             <p className="text-xs text-[var(--muted)] text-center mb-4">残り時間を選択してください（分）</p>
             <div className="grid grid-cols-6 gap-2 mb-4">
-              {Array.from({length: 11}, (_, i) => i).map(m => (
+              {Array.from({length: Math.floor(quarterSeconds(category, currentQuarter) / 60) + 1}, (_, i) => i).map(m => (
                 <button
                   key={m}
                   onClick={() => {
