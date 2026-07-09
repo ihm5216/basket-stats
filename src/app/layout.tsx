@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  verification: {
+    google: "Gqjhdec3jlkT9wqU0S9EFlH5KqQ1-vJey4c6Uv-XpvM", // Google Search Console 所有権確認
+  },
 };
 
 export const viewport: Viewport = {
