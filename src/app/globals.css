@@ -77,7 +77,7 @@ body {
 /* グローバルの .card / 配色を変えずにLPだけライト面を実現するための専用クラス */
 .card-lp {
   background: #fff;
-  border: 1px solid #e6edf6;
+  border: 1px solid #f0e2cf;
   border-radius: 18px;
 }
 .chip-lp {
@@ -90,8 +90,8 @@ body {
   border-radius: 999px;
   white-space: nowrap;
   background: #fff;
-  color: #274764;
-  border: 1px solid #e1eaf6;
+  color: #4c4033;
+  border: 1px solid #eee0cb;
 }
 
 /* ─── フォームフィールド ─── */
