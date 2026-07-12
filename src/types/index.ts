@@ -18,6 +18,20 @@ export type Team = {
   created_at: string
 }
 
+// チーム共有ログインの資格情報（オーナーのみ参照可・パスワードハッシュはサーバのみ）
+export type TeamCredential = {
+  team_id: string
+  login_code: string        // メンバーが打つチームID（例: ABCD-2481）
+  updated_at: string
+}
+
+// チームメンバー（匿名ログイン含む）。オーナー以外で記録できる人
+export type TeamMember = {
+  team_id: string
+  user_id: string
+  created_at: string
+}
+
 export type Game = {
   id: string
   team_id: string

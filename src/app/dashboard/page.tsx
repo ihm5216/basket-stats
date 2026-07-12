@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
+import { getAccessibleTeams } from '@/lib/teams'
 import { Team, Game } from '@/types'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -27,6 +28,7 @@ function DashboardContent() {
   const [recentGames, setRecentGames] = useState<(Game & { team: Team })[]>([])
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState('')
+  const [myUserId, setMyUserId] = useState('')
   const [trial, setTrial] = useState<TrialInfo | null>(null)
 
   useEffect(() => { loadData() }, [])
@@ -49,49 +51,54 @@ function DashboardContent() {
       return
     }
     setUserEmail(user.email ?? '')
+    setMyUserId(user.id)
 
-    // まずチームを取得、その後ゲームを取得（RLS対応）
-    let [{ data: teamsData }, { data: subData }, freeAccess] = await Promise.all([
-      supabase.from('teams').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
-      hasFreeAccess(supabase),
-    ])
+    // 自分がオーナーのチーム ∪ 共有ログインで参加したチーム
+    let myTeams = await getAccessibleTeams(supabase, user.id)
 
     // 保険: 登録時トリガーでのチーム自動作成が失敗していた場合、
     // ここでメタデータの team_name から作り直す（クライアントはRLSで自分のチームを作成可）
-    if ((teamsData ?? []).length === 0) {
+    if (myTeams.length === 0) {
       const teamName = (user.user_metadata?.team_name as string | undefined)?.trim()
       if (teamName) {
         const { data: created } = await supabase
           .from('teams')
           .insert({ user_id: user.id, name: teamName })
           .select('*')
-        if (created && created.length > 0) teamsData = created
+        if (created && created.length > 0) myTeams = created
       }
     }
 
-    const teamIds = (teamsData ?? []).map((t: Team) => t.id)
+    const teamIds = myTeams.map((t: Team) => t.id)
     const { data: gamesData } = teamIds.length > 0
       ? await supabase.from('games').select('*, team:teams(*)').in('team_id', teamIds).order('game_date', { ascending: false }).limit(5)
       : { data: [] }
 
-    const myTeams = teamsData ?? []
     setTeams(myTeams)
     setRecentGames((gamesData as (Game & { team: Team })[]) ?? [])
 
-    // 終了済み試合数（累計カウンター：試合を削除しても減らない）
-    const finishedCount = await getFinishedGamesCount(supabase, user.id)
-
-    // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
-    const hasSubscription = subData?.status === 'active'
-    setTrial({
-      finishedGames: finishedCount,
-      remaining: Math.max(0, FREE_GAMES_LIMIT - finishedCount),
-      hasSubscription,
-      freeAccess,
-      // 有料 or 無料ご招待なら無制限
-      canPlay: finishedCount < FREE_GAMES_LIMIT || hasSubscription || freeAccess,
-    })
+    // 課金状況は「自分がオーナーのチームがある」場合のみ表示（メンバー専用ユーザーには出さない）
+    const ownsAnyTeam = myTeams.some((t: Team) => t.user_id === user.id)
+    if (ownsAnyTeam) {
+      const [{ data: subData }, freeAccess] = await Promise.all([
+        supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
+        hasFreeAccess(supabase),
+      ])
+      // 終了済み試合数（累計カウンター：試合を削除しても減らない）
+      const finishedCount = await getFinishedGamesCount(supabase, user.id)
+      // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
+      const hasSubscription = subData?.status === 'active'
+      setTrial({
+        finishedGames: finishedCount,
+        remaining: Math.max(0, FREE_GAMES_LIMIT - finishedCount),
+        hasSubscription,
+        freeAccess,
+        // 有料 or 無料ご招待なら無制限
+        canPlay: finishedCount < FREE_GAMES_LIMIT || hasSubscription || freeAccess,
+      })
+    } else {
+      setTrial(null)
+    }
 
     clearTimeout(timeout)
     setLoading(false)
@@ -202,9 +209,15 @@ function DashboardContent() {
               {teams.map(team => (
                 <Link key={team.id} href={`/teams/${team.id}`} className="card hover:border-orange-500/50 transition-colors cursor-pointer block py-3 px-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xl">🏀</span>
-                      <h3 className="font-bold text-white">{team.name}</h3>
+                      <h3 className="font-bold text-white truncate">{team.name}</h3>
+                      {myUserId && team.user_id !== myUserId && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: 'rgba(238,122,47,0.15)', color: '#ee7a2f' }}>
+                          共有
+                        </span>
+                      )}
                     </div>
                     <span className="text-[var(--muted)] text-xl">›</span>
                   </div>

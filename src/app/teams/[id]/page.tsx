@@ -39,11 +39,16 @@ export default function TeamPage() {
   const [extractedTeamName, setExtractedTeamName] = useState('')
   const [extractedPlayers, setExtractedPlayers] = useState<{ number: string; name: string; selected: boolean }[]>([])
   const [savingExtracted, setSavingExtracted] = useState(false)
+  // チーム共有ログイン（オーナーのみ）
+  const [isOwner, setIsOwner] = useState(false)
+  const [loginCode, setLoginCode] = useState<string | null>(null)   // 発行済みチームID（未設定なら null）
+  const [members, setMembers] = useState<{ user_id: string; created_at: string }[]>([])
 
   useEffect(() => { loadData() }, [id])
 
   async function loadData() {
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
     const [{ data: teamData }, { data: playersData }, { data: gamesData }] = await Promise.all([
       supabase.from('teams').select('*').eq('id', id).single(),
       supabase.from('players').select('*').eq('team_id', id).order('number'),
@@ -54,6 +59,18 @@ export default function TeamPage() {
     setTeam(teamData)
     setPlayers(playersData ?? [])
     setGames(gamesData ?? [])
+
+    const owner = !!user && teamData.user_id === user.id
+    setIsOwner(owner)
+    if (owner) {
+      // オーナーだけがチームの資格情報・メンバー一覧を読める（RLS）
+      const [{ data: cred }, { data: mem }] = await Promise.all([
+        supabase.from('team_credentials').select('login_code').eq('team_id', id).maybeSingle(),
+        supabase.from('team_members').select('user_id, created_at').eq('team_id', id).order('created_at'),
+      ])
+      setLoginCode(cred?.login_code ?? null)
+      setMembers(mem ?? [])
+    }
     setLoading(false)
   }
 
@@ -225,33 +242,46 @@ export default function TeamPage() {
         {/* 試合タブ */}
         {tab === 'games' && (
           <div>
-            {/* チーム種別（一般 / ミニバス）。タイムアウト規則・公式スコアシートが切替わる */}
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <span className="text-xs text-[var(--muted)] flex-shrink-0">種別</span>
-              {(['general', 'mini'] as const).map(cat => {
-                const active = (team.category ?? 'general') === cat
-                return (
-                  <button
-                    key={cat}
-                    onClick={async () => {
-                      if (active) return
-                      const supabase = createClient()
-                      const { error } = await supabase.from('teams').update({ category: cat }).eq('id', id)
-                      if (!error) setTeam(prev => prev ? { ...prev, category: cat } : prev)
-                    }}
-                    className="text-xs px-3 py-1.5 rounded-full border transition-colors"
-                    style={active
-                      ? { background: 'rgba(14,165,233,0.15)', borderColor: 'rgba(14,165,233,0.6)', color: '#38bdf8', fontWeight: 700 }
-                      : { background: 'var(--card)', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
-                  >
-                    {cat === 'general' ? '一般 / 中高' : 'ミニバス'}
-                  </button>
-                )
-              })}
-              <span className="text-[10px] text-[var(--muted)]">
-                （ミニバス＝6分Q・3Pなし・タイムアウト各Q1回）
-              </span>
-            </div>
+            {/* チーム種別（一般 / ミニバス）。オーナーのみ変更可（メンバーはRLSで更新不可のため非表示） */}
+            {isOwner && (
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <span className="text-xs text-[var(--muted)] flex-shrink-0">種別</span>
+                {(['general', 'mini'] as const).map(cat => {
+                  const active = (team.category ?? 'general') === cat
+                  return (
+                    <button
+                      key={cat}
+                      onClick={async () => {
+                        if (active) return
+                        const supabase = createClient()
+                        const { error } = await supabase.from('teams').update({ category: cat }).eq('id', id)
+                        if (!error) setTeam(prev => prev ? { ...prev, category: cat } : prev)
+                      }}
+                      className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+                      style={active
+                        ? { background: 'rgba(14,165,233,0.15)', borderColor: 'rgba(14,165,233,0.6)', color: '#38bdf8', fontWeight: 700 }
+                        : { background: 'var(--card)', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
+                    >
+                      {cat === 'general' ? '一般 / 中高' : 'ミニバス'}
+                    </button>
+                  )
+                })}
+                <span className="text-[10px] text-[var(--muted)]">
+                  （ミニバス＝6分Q・3Pなし・タイムアウト各Q1回）
+                </span>
+              </div>
+            )}
+
+            {/* チーム共有ログイン（オーナーのみ） */}
+            {isOwner && (
+              <TeamLoginCard
+                teamId={id}
+                loginCode={loginCode}
+                members={members}
+                setLoginCode={setLoginCode}
+                setMembers={setMembers}
+              />
+            )}
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-semibold text-white">試合一覧</h2>
               <Link href={`/games/new?team=${id}`} className="btn-primary text-sm py-2 px-4">試合を登録</Link>
@@ -509,6 +539,197 @@ export default function TeamPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TeamLoginCard({
+  teamId,
+  loginCode,
+  members,
+  setLoginCode,
+  setMembers,
+}: {
+  teamId: string
+  loginCode: string | null
+  members: { user_id: string; created_at: string }[]
+  setLoginCode: (v: string | null) => void
+  setMembers: (v: { user_id: string; created_at: string }[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
+  const [lastPassword, setLastPassword] = useState<string | null>(null) // 設定直後だけ保持（招待文コピー用）
+
+  async function save() {
+    if (password.length < 4) { setErr('パスワードは4文字以上にしてください'); return }
+    setBusy(true); setErr('')
+    try {
+      const res = await fetch('/api/team-login/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, password }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErr(data.error ?? '設定に失敗しました'); setBusy(false); return }
+      setLoginCode(data.loginCode)
+      setLastPassword(password)
+      setPassword('')
+      setEditing(false)
+      setMsg('✓ 設定しました')
+      setTimeout(() => setMsg(''), 3000)
+    } catch {
+      setErr('通信エラーが発生しました')
+    }
+    setBusy(false)
+  }
+
+  async function disable() {
+    if (!confirm('チーム共有ログインを無効化しますか？\n今ログイン中のメンバーも記録できなくなります。')) return
+    setBusy(true); setErr('')
+    try {
+      const res = await fetch('/api/team-login/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, action: 'disable' }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErr(data.error ?? '無効化に失敗しました'); setBusy(false); return }
+      setLoginCode(null)
+      setMembers([])
+      setLastPassword(null)
+      setEditing(false)
+    } catch {
+      setErr('通信エラーが発生しました')
+    }
+    setBusy(false)
+  }
+
+  async function removeMember(userId: string) {
+    const supabase = createClient()
+    const { error } = await supabase.from('team_members').delete().eq('team_id', teamId).eq('user_id', userId)
+    if (!error) setMembers(members.filter(m => m.user_id !== userId))
+  }
+
+  function copyText(text: string, label: string) {
+    navigator.clipboard.writeText(text)
+    setMsg(label)
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const inviteText = loginCode
+    ? `🏀 バスケの記録アプリ「BasketStats」に参加してね！\n\nログインページ: ${typeof window !== 'undefined' ? window.location.origin : ''}/login\n「チームのパスワードで参加」から下記を入力するだけ！\n\nチームID: ${loginCode}\nパスワード: ${lastPassword ?? '（代表者にご確認ください）'}`
+    : ''
+
+  return (
+    <div className="card mb-4">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 text-left">
+        <span className="text-lg">🔑</span>
+        <span className="font-semibold text-white flex-1">チームで共有ログイン</span>
+        <span
+          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+          style={loginCode
+            ? { background: 'rgba(6,199,85,0.15)', color: '#22c55e' }
+            : { background: 'var(--card-border)', color: 'var(--muted)' }}
+        >
+          {loginCode ? '有効' : '未設定'}
+        </span>
+        <span className="text-[var(--muted)] text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 border-t border-[var(--card-border)] pt-3">
+          <p className="text-xs text-[var(--muted)] leading-relaxed mb-3">
+            チーム用の<b className="text-white">パスワード</b>を決めると、他の保護者・スタッフも
+            <b className="text-white">チームID＋パスワード</b>でログインして記録できます。
+            個人のGoogle・メールを教える必要はありません。（支払い・チーム削除は代表者のみ）
+          </p>
+
+          {err && <p className="text-xs text-red-400 mb-2">⚠ {err}</p>}
+
+          {!loginCode || editing ? (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                className="input-field text-base"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={loginCode ? '新しいパスワード（4文字以上）' : 'チームのパスワード（4文字以上）'}
+                autoComplete="off"
+              />
+              <div className="flex gap-2">
+                <button onClick={save} disabled={busy || password.length < 4} className="btn-primary text-sm py-2 px-4">
+                  {busy ? '保存中…' : loginCode ? 'パスワードを変更' : '有効にする'}
+                </button>
+                {editing && (
+                  <button onClick={() => { setEditing(false); setPassword(''); setErr('') }} className="btn-secondary text-sm py-2 px-4">
+                    キャンセル
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {/* チームID */}
+              <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] text-[var(--muted)]">チームID</div>
+                  <div className="text-lg font-black tracking-widest text-orange-400">{loginCode}</div>
+                </div>
+                <button onClick={() => copyText(loginCode, '✓ チームIDをコピー')} className="btn-secondary text-xs py-2 px-3 flex-shrink-0">
+                  コピー
+                </button>
+              </div>
+
+              <button
+                onClick={() => copyText(inviteText, '✓ 招待メッセージをコピー')}
+                className="btn-primary text-sm py-2.5 px-4"
+              >
+                📋 LINE用の招待メッセージをコピー
+              </button>
+              {!lastPassword && (
+                <p className="text-[10px] text-[var(--muted)] -mt-1">
+                  ※ セキュリティ上パスワードは保存していません。招待文にはパスワードが入らないため、
+                  別途メンバーにお伝えください（忘れた場合は「パスワードを変更」で再設定）。
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button onClick={() => { setEditing(true); setErr('') }} className="btn-secondary text-sm py-2 px-4">
+                  パスワードを変更
+                </button>
+                <button onClick={disable} disabled={busy} className="text-sm py-2 px-4 rounded-xl border border-red-500/40 text-red-300 hover:bg-red-500/10 transition-colors">
+                  無効化
+                </button>
+              </div>
+
+              {/* メンバー一覧 */}
+              <div className="border-t border-[var(--card-border)] pt-3">
+                <div className="text-xs text-[var(--muted)] mb-2">
+                  参加中のメンバー：{members.length}人
+                </div>
+                {members.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {members.map((m, i) => (
+                      <div key={m.user_id} className="flex items-center justify-between text-sm">
+                        <span className="text-white">👤 記録者{i + 1}</span>
+                        <button onClick={() => removeMember(m.user_id)} className="text-[var(--muted)] hover:text-red-400 text-xs transition-colors">
+                          解除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {msg && <p className="text-xs text-green-400 mt-2">{msg}</p>}
         </div>
       )}
     </div>

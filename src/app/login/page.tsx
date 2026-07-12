@@ -8,12 +8,14 @@ import { useEffect } from 'react'
 import { authErrorMessage } from '@/lib/authError'
 import InAppBrowserNotice from '@/components/InAppBrowserNotice'
 
-type Mode = 'top' | 'magic' | 'password' | 'sent'
+type Mode = 'top' | 'magic' | 'password' | 'team' | 'sent'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [teamCode, setTeamCode] = useState('')
+  const [teamPassword, setTeamPassword] = useState('')
   const [mode, setMode] = useState<Mode>('top')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -67,6 +69,30 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('メールアドレスまたはパスワードが違います'); setLoading(false) }
     else { router.push('/dashboard') }
+  }
+
+  // ── チームID＋パスワードでの参加（メンバー用・匿名ログイン） ──
+  async function handleTeamLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/team-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loginCode: teamCode, password: teamPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'ログインに失敗しました')
+        setLoading(false)
+        return
+      }
+      // 匿名セッションのCookieを middleware に確実に反映させるためハードリダイレクト
+      window.location.href = `/teams/${data.teamId}`
+    } catch {
+      setError('通信エラーが発生しました')
+      setLoading(false)
+    }
   }
 
   // ── 送信完了画面 ─────────────────────────────
@@ -179,6 +205,26 @@ export default function LoginPage() {
               <span className="text-[10px] mr-3 rounded-full px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.3)' }}>近日公開</span>
             </button>
 
+            {/* 区切り */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
+              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>または</span>
+              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
+            </div>
+
+            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
+              チームに招待された方（保護者・スタッフ）
+            </div>
+
+            {/* チームID＋パスワードで参加 */}
+            <button onClick={() => { setMode('team'); setError('') }} disabled={loading}
+              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
+              style={{ background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.45)', color: '#ee7a2f' }}>
+              <span className="text-xl ml-3">🏀</span>
+              <span className="flex-1 text-left">チームのパスワードで参加</span>
+              <span className="text-[10px] mr-3 font-normal" style={{ color: 'rgba(238,122,47,0.75)' }}>登録不要</span>
+            </button>
+
           </div>
         )}
 
@@ -223,6 +269,32 @@ export default function LoginPage() {
               className="w-full text-center font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
               {loading ? 'ログイン中…' : 'ログイン'}
+            </button>
+          </form>
+        )}
+
+        {/* ── チームID＋パスワードで参加 ── */}
+        {mode === 'team' && (
+          <form onSubmit={handleTeamLogin} className="flex flex-col gap-3">
+            <button type="button" onClick={() => setMode('top')}
+              className="flex items-center gap-1 text-xs mb-1" style={{ color: 'var(--muted)' }}>
+              ← 戻る
+            </button>
+            <h2 className="font-bold text-white mb-1">🏀 チームのパスワードで参加</h2>
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'var(--muted)' }}>
+              チームの代表者から共有された<b className="text-white">チームID</b>と<b className="text-white">パスワード</b>を入力してください。
+              メールアドレスの登録は不要です。
+            </p>
+            <input type="text" className="input-field text-base tracking-widest" value={teamCode}
+              onChange={e => setTeamCode(e.target.value)} required placeholder="チームID（例: ABCD-2481）"
+              autoCapitalize="characters" autoFocus />
+            <input type="password" className="input-field text-base" value={teamPassword}
+              onChange={e => setTeamPassword(e.target.value)} required placeholder="チームのパスワード"
+              autoComplete="off" />
+            <button type="submit" disabled={loading || !teamCode || !teamPassword}
+              className="w-full text-center font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
+              {loading ? '参加中…' : 'チームに参加する →'}
             </button>
           </form>
         )}

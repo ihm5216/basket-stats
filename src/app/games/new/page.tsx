@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { getAccessibleTeams } from '@/lib/teams'
 import { Team, Player } from '@/types'
 import { Suspense } from 'react'
 
@@ -160,8 +161,9 @@ function NewGameForm() {
         window.location.href = '/login'
         return
       }
-      const { data } = await supabase.from('teams').select('*').eq('user_id', user.id)
-      setTeams(data ?? [])
+      // 自分がオーナーのチーム ∪ 共有ログインで参加したチーム
+      const accessible = await getAccessibleTeams(supabase, user.id)
+      setTeams(accessible)
     }
     load()
   }, [])

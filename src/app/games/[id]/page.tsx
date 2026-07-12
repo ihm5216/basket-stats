@@ -2980,25 +2980,32 @@ export default function GamePage() {
 
   async function finishGame() {
     // ── 3試合無料制限チェック ──────────────────────────────────
+    // 判定は「チームのオーナー基準」。メンバー（チーム共有ログイン）が終了する場合も、
+    // オーナーのサブスク/無料ご招待/無料枠で判定するため team_can_play RPC を使う。
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      // サブスクリプション確認 + 無料ご招待（オーナー・友達）確認
-      const [{ data: sub }, freeAccess] = await Promise.all([
-        supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
-        hasFreeAccess(supabase),
-      ])
-      // 'trialing' は登録時トリガーの初期値のため有料扱いにしない（有料は 'active' のみ）
-      // 無料ご招待のユーザーは決済なしでも無制限に使える
-      const hasSubscription = sub?.status === 'active' || freeAccess
-
-      if (!hasSubscription) {
-        // 累計の試合終了回数で判定（試合を削除しても減らない＝無料枠リセット不可）
-        const finishedTotal = await getFinishedGamesCount(supabase, user.id)
-        if (finishedTotal >= FREE_GAMES_LIMIT) {
-          setShowPaywall(true)
-          return  // ← 試合終了をブロックしてペイウォールを表示
+      let blocked = false
+      if (game?.team_id) {
+        const { data: canPlay, error: rpcErr } = await supabase.rpc('team_can_play', { t_id: game.team_id })
+        if (!rpcErr && typeof canPlay === 'boolean') {
+          blocked = !canPlay
+        } else {
+          // RPC未適用（マイグレーション前）などはフォールバックで従来ロジック（本人基準）
+          const [{ data: sub }, freeAccess] = await Promise.all([
+            supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
+            hasFreeAccess(supabase),
+          ])
+          const hasSubscription = sub?.status === 'active' || freeAccess
+          if (!hasSubscription) {
+            const finishedTotal = await getFinishedGamesCount(supabase, user.id)
+            blocked = finishedTotal >= FREE_GAMES_LIMIT
+          }
         }
+      }
+      if (blocked) {
+        setShowPaywall(true)
+        return  // ← 試合終了をブロックしてペイウォールを表示
       }
     }
     // ────────────────────────────────────────────────────────────

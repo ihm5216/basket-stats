@@ -39,6 +39,9 @@ export async function updateSession(request: NextRequest) {
   const isPublicPath = publicPaths.some(p => pathname === p || pathname.startsWith('/share/'))
     || pathname.startsWith('/api/auth/')
     || pathname.startsWith('/auth/')
+    // チームID＋パスワードでのメンバーログイン（未ログイン訪問者が叩く）。
+    // setup 側は内部で getUser を検証するためここで通しても安全。
+    || pathname.startsWith('/api/team-login')
     // Stripe Webhookは認証Cookieを持たない外部からのPOST。署名検証(STRIPE_WEBHOOK_SECRET)で保護される
     || pathname === '/api/stripe/webhook'
 
