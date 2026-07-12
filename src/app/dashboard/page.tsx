@@ -230,6 +230,12 @@ function DashboardContent() {
               ))}
             </div>
           )}
+          {/* 1アカウント1チームの案内（既にオーナーのチームがある人向け） */}
+          {ownsTeam && (
+            <p className="mt-3 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              ※ チームは1アカウントにつき1つまでです。別のチームを作りたい場合は、別のメール／Googleアカウントでご登録ください。
+            </p>
+          )}
         </section>
 
         {/* 最近の試合 */}
