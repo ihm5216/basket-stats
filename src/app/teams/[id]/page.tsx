@@ -566,8 +566,23 @@ function TeamLoginCard({
   const [msg, setMsg] = useState('')
   const [lastPassword, setLastPassword] = useState<string | null>(null) // 設定直後だけ保持（招待文コピー用）
 
+  // 半角英数字のみに正規化（全角→半角し、ひらがな・記号・空白は除去）。
+  // 共有パスワードはスマホでも確実に打てる英数字に統一する。
+  function toAlnum(s: string): string {
+    return s
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[^A-Za-z0-9]/g, '')
+  }
+
+  function generatePassword() {
+    const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789' // 紛らわしい o/l/0/1 は除外
+    const pw = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')
+    setPassword(pw)
+    setErr('')
+  }
+
   async function save() {
-    if (password.length < 4) { setErr('パスワードは4文字以上にしてください'); return }
+    if (password.length < 4) { setErr('パスワードは半角の英数字4文字以上にしてください'); return }
     setBusy(true); setErr('')
     try {
       const res = await fetch('/api/team-login/setup', {
@@ -658,13 +673,24 @@ function TeamLoginCard({
                 type="text"
                 className="input-field text-base"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder={loginCode ? '新しいパスワード（4文字以上）' : 'チームのパスワード（4文字以上）'}
+                onChange={e => setPassword(toAlnum(e.target.value))}
+                placeholder={loginCode ? '新しいパスワード（半角英数字）' : 'チームのパスワード（半角英数字）'}
+                autoCapitalize="none"
                 autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="text"
               />
-              <div className="flex gap-2">
+              <p className="text-[10px] text-[var(--muted)] leading-relaxed">
+                スマホでも打ちやすいよう、<b className="text-white">半角の英数字</b>だけ設定できます（例: hawks2024）。
+                日本語や記号は自動で除かれます。
+              </p>
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={save} disabled={busy || password.length < 4} className="btn-primary text-sm py-2 px-4">
                   {busy ? '保存中…' : loginCode ? 'パスワードを変更' : '有効にする'}
+                </button>
+                <button onClick={generatePassword} type="button" className="btn-secondary text-sm py-2 px-4">
+                  🎲 自動で作る
                 </button>
                 {editing && (
                   <button onClick={() => { setEditing(false); setPassword(''); setErr('') }} className="btn-secondary text-sm py-2 px-4">

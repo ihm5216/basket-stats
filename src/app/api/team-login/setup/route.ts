@@ -52,9 +52,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, disabled: true })
     }
 
-    // 設定/変更
-    if (!password || password.length < 4) {
-      return NextResponse.json({ error: 'パスワードは4文字以上にしてください' }, { status: 400 })
+    // 設定/変更（共有パスワードはどの端末でも打てる半角英数字に統一）
+    if (!password || !/^[A-Za-z0-9]{4,}$/.test(password)) {
+      return NextResponse.json({ error: 'パスワードは半角の英数字4文字以上で設定してください' }, { status: 400 })
     }
     const password_hash = await bcrypt.hash(password, 10)
 

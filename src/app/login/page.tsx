@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [teamCode, setTeamCode] = useState('')
   const [teamPassword, setTeamPassword] = useState('')
+  const [showTeamPw, setShowTeamPw] = useState(false)
   const [mode, setMode] = useState<Mode>('top')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -285,12 +286,44 @@ export default function LoginPage() {
               チームの代表者から共有された<b className="text-white">チームID</b>と<b className="text-white">パスワード</b>を入力してください。
               メールアドレスの登録は不要です。
             </p>
-            <input type="text" className="input-field text-base tracking-widest" value={teamCode}
-              onChange={e => setTeamCode(e.target.value)} required placeholder="チームID（例: ABCD-2481）"
-              autoCapitalize="characters" autoFocus />
-            <input type="password" className="input-field text-base" value={teamPassword}
-              onChange={e => setTeamPassword(e.target.value)} required placeholder="チームのパスワード"
-              autoComplete="off" />
+            <input
+              type="text"
+              name="teamcode"
+              className="input-field text-base tracking-widest"
+              value={teamCode}
+              onChange={e => setTeamCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+              required
+              placeholder="チームID（例: ABCD-2481）"
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+            />
+            <div className="relative">
+              <input
+                type={showTeamPw ? 'text' : 'password'}
+                name="teampassword"
+                className="input-field text-base pr-16"
+                value={teamPassword}
+                onChange={e => setTeamPassword(e.target.value)}
+                required
+                placeholder="チームのパスワード（英数字）"
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="text"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTeamPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold"
+                style={{ color: 'var(--muted)' }}
+              >
+                {showTeamPw ? '隠す' : '表示'}
+              </button>
+            </div>
             <button type="submit" disabled={loading || !teamCode || !teamPassword}
               className="w-full text-center font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
