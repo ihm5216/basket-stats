@@ -335,12 +335,12 @@ export default function TeamPage() {
 
             {/* 写真から一括登録 */}
             <div className="card mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+                <div className="min-w-0">
                   <div className="text-sm font-semibold text-white">📷 写真から一括登録</div>
                   <div className="text-xs text-[var(--muted)] mt-0.5">公式記録用紙の写真を撮影 or アルバムから選んで自動登録</div>
                 </div>
-                <label className={`btn-primary text-sm py-2 px-4 cursor-pointer ${extracting ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className={`btn-primary text-sm py-2 px-4 cursor-pointer text-center w-full sm:w-auto sm:flex-shrink-0 ${extracting ? 'opacity-50 pointer-events-none' : ''}`}>
                   {extracting ? '処理中...' : '写真を選択'}
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={extracting} />
                 </label>
