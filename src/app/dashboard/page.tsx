@@ -29,6 +29,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState('')
   const [myUserId, setMyUserId] = useState('')
+  const [ownsTeam, setOwnsTeam] = useState(false)   // 1アカウント1チーム: 既にオーナーのチームがあるか
   const [trial, setTrial] = useState<TrialInfo | null>(null)
 
   useEffect(() => { loadData() }, [])
@@ -79,6 +80,7 @@ function DashboardContent() {
 
     // 課金状況は「自分がオーナーのチームがある」場合のみ表示（メンバー専用ユーザーには出さない）
     const ownsAnyTeam = myTeams.some((t: Team) => t.user_id === user.id)
+    setOwnsTeam(ownsAnyTeam)
     if (ownsAnyTeam) {
       const [{ data: subData }, freeAccess] = await Promise.all([
         supabase.from('subscriptions').select('status').eq('user_id', user.id).maybeSingle(),
@@ -192,7 +194,10 @@ function DashboardContent() {
                 🏀 試合を登録
               </Link>
             )}
-            <Link href="/teams/new" className="btn-secondary text-sm py-2 px-4">+ チームを作成</Link>
+            {/* 1アカウント1チーム: 既にオーナーのチームがある人には出さない */}
+            {!ownsTeam && (
+              <Link href="/teams/new" className="btn-secondary text-sm py-2 px-4">+ チームを作成</Link>
+            )}
           </div>
         </div>
 

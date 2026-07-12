@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -11,6 +11,21 @@ export default function NewTeamPage() {
   const [category, setCategory] = useState<'general' | 'mini'>('general')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // 1アカウント1チーム: 既にチームを持っている場合は作成させない
+  const [existingTeamId, setExistingTeamId] = useState<string | null>(null)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    async function check() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setChecking(false); return }
+      const { data } = await supabase.from('teams').select('id').eq('user_id', user.id).limit(1)
+      if (data && data.length > 0) setExistingTeamId(data[0].id)
+      setChecking(false)
+    }
+    check()
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,7 +49,12 @@ export default function NewTeamPage() {
       .single()
 
     if (error) {
-      setError('チームの作成に失敗しました')
+      // DBトリガーで「1アカウント1チーム」制限に当たった場合の案内
+      setError(
+        /1チーム|one team|check_violation/i.test(error.message)
+          ? '1アカウントにつき1チームまでです。別のチームを作りたい場合は、別のメールアカウントでご登録ください。'
+          : 'チームの作成に失敗しました'
+      )
       setLoading(false)
     } else {
       router.push(`/teams/${data.id}`)
@@ -49,12 +69,25 @@ export default function NewTeamPage() {
 
       <h1 className="text-2xl font-bold text-white mb-8">チームを作成</h1>
 
-      {error && (
+      {!checking && existingTeamId && (
+        <div className="card text-center py-10">
+          <div className="text-4xl mb-3">🏀</div>
+          <h2 className="text-lg font-bold text-white mb-2">すでにチームを作成済みです</h2>
+          <p className="text-sm text-[var(--muted)] mb-6 leading-relaxed">
+            1アカウントにつきチームは1つまでです。<br />
+            別のチームを作りたい場合は、別のメールアカウントでご登録ください。
+          </p>
+          <Link href={`/teams/${existingTeamId}`} className="btn-primary">自分のチームを開く →</Link>
+        </div>
+      )}
+
+      {!checking && !existingTeamId && error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3 mb-4">
           {error}
         </div>
       )}
 
+      {!checking && !existingTeamId && (
       <form onSubmit={handleSubmit} className="card flex flex-col gap-4">
         <div>
           <label className="block text-sm text-[var(--muted)] mb-1.5">チーム名</label>
@@ -98,6 +131,7 @@ export default function NewTeamPage() {
           {loading ? '作成中...' : 'チームを作成する'}
         </button>
       </form>
+      )}
     </main>
   )
 }
