@@ -42,6 +42,7 @@ export default function TeamPage() {
   // チーム共有ログイン（オーナーのみ）
   const [isOwner, setIsOwner] = useState(false)
   const [loginCode, setLoginCode] = useState<string | null>(null)   // 発行済みチームID（未設定なら null）
+  const [savedPassword, setSavedPassword] = useState<string | null>(null) // オーナーのみ閲覧できる共有パスワード
   const [members, setMembers] = useState<{ user_id: string; created_at: string }[]>([])
 
   useEffect(() => { loadData() }, [id])
@@ -65,10 +66,11 @@ export default function TeamPage() {
     if (owner) {
       // オーナーだけがチームの資格情報・メンバー一覧を読める（RLS）
       const [{ data: cred }, { data: mem }] = await Promise.all([
-        supabase.from('team_credentials').select('login_code').eq('team_id', id).maybeSingle(),
+        supabase.from('team_credentials').select('login_code, password_plain').eq('team_id', id).maybeSingle(),
         supabase.from('team_members').select('user_id, created_at').eq('team_id', id).order('created_at'),
       ])
       setLoginCode(cred?.login_code ?? null)
+      setSavedPassword(cred?.password_plain ?? null)
       setMembers(mem ?? [])
     }
     setLoading(false)
@@ -277,8 +279,10 @@ export default function TeamPage() {
               <TeamLoginCard
                 teamId={id}
                 loginCode={loginCode}
+                savedPassword={savedPassword}
                 members={members}
                 setLoginCode={setLoginCode}
+                setSavedPassword={setSavedPassword}
                 setMembers={setMembers}
               />
             )}
@@ -548,14 +552,18 @@ export default function TeamPage() {
 function TeamLoginCard({
   teamId,
   loginCode,
+  savedPassword,
   members,
   setLoginCode,
+  setSavedPassword,
   setMembers,
 }: {
   teamId: string
   loginCode: string | null
+  savedPassword: string | null
   members: { user_id: string; created_at: string }[]
   setLoginCode: (v: string | null) => void
+  setSavedPassword: (v: string | null) => void
   setMembers: (v: { user_id: string; created_at: string }[]) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -564,7 +572,6 @@ function TeamLoginCard({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
-  const [lastPassword, setLastPassword] = useState<string | null>(null) // 設定直後だけ保持（招待文コピー用）
 
   // 半角英数字のみに正規化（全角→半角し、ひらがな・記号・空白は除去）。
   // 共有パスワードはスマホでも確実に打てる英数字に統一する。
@@ -593,7 +600,7 @@ function TeamLoginCard({
       const data = await res.json()
       if (!res.ok) { setErr(data.error ?? '設定に失敗しました'); setBusy(false); return }
       setLoginCode(data.loginCode)
-      setLastPassword(password)
+      setSavedPassword(password)
       setPassword('')
       setEditing(false)
       setMsg('✓ 設定しました')
@@ -617,7 +624,7 @@ function TeamLoginCard({
       if (!res.ok) { setErr(data.error ?? '無効化に失敗しました'); setBusy(false); return }
       setLoginCode(null)
       setMembers([])
-      setLastPassword(null)
+      setSavedPassword(null)
       setEditing(false)
     } catch {
       setErr('通信エラーが発生しました')
@@ -638,7 +645,7 @@ function TeamLoginCard({
   }
 
   const inviteText = loginCode
-    ? `🏀 バスケの記録アプリ「BasketStats」に参加してね！\n\nログインページ: ${typeof window !== 'undefined' ? window.location.origin : ''}/login\n「チームのパスワードで参加」から下記を入力するだけ！\n\nチームID: ${loginCode}\nパスワード: ${lastPassword ?? '（代表者にご確認ください）'}`
+    ? `🏀 バスケの記録アプリ「BasketStats」に参加してね！\n\nログインページ: ${typeof window !== 'undefined' ? window.location.origin : ''}/login\n「チームのID・パスワードで参加」から下記を入力するだけ！\n\nチームID: ${loginCode}\nパスワード: ${savedPassword ?? '（代表者にご確認ください）'}`
     : ''
 
   return (
@@ -701,27 +708,42 @@ function TeamLoginCard({
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {/* チームID */}
-              <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2.5">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] text-[var(--muted)]">チームID</div>
-                  <div className="text-lg font-black tracking-widest text-orange-400">{loginCode}</div>
+              {/* チームID＋パスワード */}
+              <div className="flex flex-col gap-2 bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-[var(--muted)]">チームID</div>
+                    <div className="text-lg font-black tracking-widest text-orange-400">{loginCode}</div>
+                  </div>
+                  <button onClick={() => copyText(loginCode, '✓ チームIDをコピー')} className="btn-secondary text-xs py-2 px-3 flex-shrink-0">
+                    コピー
+                  </button>
                 </div>
-                <button onClick={() => copyText(loginCode, '✓ チームIDをコピー')} className="btn-secondary text-xs py-2 px-3 flex-shrink-0">
-                  コピー
-                </button>
+                <div className="flex items-center gap-2 border-t border-orange-500/20 pt-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-[var(--muted)]">パスワード</div>
+                    <div className="text-lg font-black text-orange-400">
+                      {savedPassword ?? '（「パスワードを変更」で再設定してください）'}
+                    </div>
+                  </div>
+                  {savedPassword && (
+                    <button onClick={() => copyText(savedPassword, '✓ パスワードをコピー')} className="btn-secondary text-xs py-2 px-3 flex-shrink-0">
+                      コピー
+                    </button>
+                  )}
+                </div>
               </div>
 
               <button
                 onClick={() => copyText(inviteText, '✓ 招待メッセージをコピー')}
                 className="btn-primary text-sm py-2.5 px-4"
               >
-                📋 LINE用の招待メッセージをコピー
+                📋 LINE用の招待メッセージをコピー（ID＋パスワード入り）
               </button>
-              {!lastPassword && (
+              {!savedPassword && (
                 <p className="text-[10px] text-[var(--muted)] -mt-1">
-                  ※ セキュリティ上パスワードは保存していません。招待文にはパスワードが入らないため、
-                  別途メンバーにお伝えください（忘れた場合は「パスワードを変更」で再設定）。
+                  ※ このチームIDは以前の方式で作られたため、パスワードが表示できません。
+                  「パスワードを変更」で英数字のパスワードに再設定すると、以降は招待文にパスワードも入ります。
                 </p>
               )}
 

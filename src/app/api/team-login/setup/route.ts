@@ -86,7 +86,8 @@ export async function POST(req: Request) {
 
     const { error } = await admin
       .from('team_credentials')
-      .upsert({ team_id: teamId, login_code, password_hash, updated_at: new Date().toISOString() })
+      // password_plain はオーナーのみ読めるRLSで保護（共有前提の合言葉のため保存を許容）
+      .upsert({ team_id: teamId, login_code, password_hash, password_plain: password, updated_at: new Date().toISOString() })
     if (error) {
       console.error('team_credentials upsert error:', error.message)
       return NextResponse.json({ error: '保存に失敗しました' }, { status: 500 })

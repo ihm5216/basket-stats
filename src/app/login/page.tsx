@@ -141,12 +141,37 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ── ① Google ── */}
+        {/* ── トップ：まずチーム参加（メンバー）を大きく、その下に代表者ログイン ── */}
         {mode === 'top' && (
           <div className="flex flex-col gap-3">
 
-            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
-              SNS・メールアカウントでログイン
+            {/* ① チームID＋パスワードで参加（保護者・スタッフ＝一番多い） */}
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+              チームに参加して記録する
+            </div>
+            <button onClick={() => { setMode('team'); setError('') }} disabled={loading}
+              className="w-full flex items-center gap-3 rounded-2xl py-4 font-bold text-sm active:scale-95 transition-transform"
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)', color: 'white', boxShadow: '0 12px 22px -10px rgba(238,122,47,0.7)' }}>
+              <span className="text-2xl ml-3">🏀</span>
+              <span className="flex-1 text-left leading-tight">
+                チームのID・パスワードで参加
+                <span className="block text-[11px] font-normal opacity-90 mt-0.5">
+                  LINEでID・パスワードをもらった方はこちら
+                </span>
+              </span>
+              <span className="text-[10px] mr-3 rounded-full px-2 py-0.5 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.25)' }}>登録不要</span>
+            </button>
+
+            {/* 区切り */}
+            <div className="flex items-center gap-3 my-2">
+              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
+              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>または</span>
+              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
+            </div>
+
+            {/* ② チームを作る・管理する方（代表者） */}
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+              チームを作る・管理する方（代表者）
             </div>
 
             {/* Google */}
@@ -163,67 +188,13 @@ export default function LoginPage() {
               <span className="text-[10px] mr-3 font-normal" style={{ color: '#888' }}>YouTube / Gmail</span>
             </button>
 
-            {/* Apple ログインは Supabase 側のプロバイダ設定（要 Apple Developer 契約）が
-                完了するまで非表示。設定後に復活させること。 */}
-
-            {/* 区切り */}
-            <div className="flex items-center gap-3 my-1">
-              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>または</span>
-              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-            </div>
-
-            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
-              メールでログイン（Yahoo!等どのメールでもOK）
-            </div>
-
-            {/* Magic Link */}
+            {/* Magic Link（メール登録の方の唯一のログイン。パスワード不要で全メールOK） */}
             <button onClick={() => { setMode('magic'); setError('') }} disabled={loading}
               className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
               style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', color: '#38bdf8' }}>
               <span className="text-xl ml-3">✉️</span>
-              <span className="flex-1 text-left">メールリンクでログイン</span>
+              <span className="flex-1 text-left">メールでログイン</span>
               <span className="text-[10px] mr-3 font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>パスワード不要</span>
-            </button>
-
-            {/* パスワード */}
-            <button onClick={() => { setMode('password'); setError('') }} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
-              style={{ background: 'var(--card)', border: '1px solid var(--card-border)', color: 'var(--muted)' }}>
-              <span className="text-xl ml-3">🔒</span>
-              <span className="flex-1 text-left">メール + パスワード</span>
-              <span className="text-[10px] mr-3 font-normal">従来のログイン</span>
-            </button>
-
-            {/* LINE（近日公開）*/}
-            <button disabled
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm opacity-40 cursor-not-allowed"
-              style={{ background: '#06C755', color: 'white', border: '1px solid #06C755' }}>
-              <svg width="20" height="20" viewBox="0 0 40 40" fill="white" className="ml-3 flex-shrink-0">
-                <path d="M20 2C10.06 2 2 9.16 2 17.9c0 5.6 3.54 10.52 8.86 13.36-.39 1.46-1.42 5.3-1.63 6.12-.26 1.02.37 1.01.78.74.32-.21 5.1-3.47 7.17-4.88.9.13 1.83.2 2.77.2 9.94 0 18-7.16 18-15.9S29.94 2 20 2z"/>
-              </svg>
-              <span className="flex-1 text-left">LINEでログイン</span>
-              <span className="text-[10px] mr-3 rounded-full px-2 py-0.5" style={{ background: 'rgba(255,255,255,0.3)' }}>近日公開</span>
-            </button>
-
-            {/* 区切り */}
-            <div className="flex items-center gap-3 my-1">
-              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>または</span>
-              <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-            </div>
-
-            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
-              チームに招待された方（保護者・スタッフ）
-            </div>
-
-            {/* チームID＋パスワードで参加 */}
-            <button onClick={() => { setMode('team'); setError('') }} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
-              style={{ background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.45)', color: '#ee7a2f' }}>
-              <span className="text-xl ml-3">🏀</span>
-              <span className="flex-1 text-left">チームのパスワードで参加</span>
-              <span className="text-[10px] mr-3 font-normal" style={{ color: 'rgba(238,122,47,0.75)' }}>登録不要</span>
             </button>
 
           </div>
