@@ -185,7 +185,7 @@ function RunningScoreView({ events, teamName, opponentName, players }: {
                     <th className="text-center py-1.5 px-2 text-[var(--muted)] w-8">#</th>
                     <th className="text-center py-1.5 px-1 text-orange-400 w-1/3">{teamName}</th>
                     <th className="text-center py-1.5 px-1 text-[var(--muted)] w-8">-</th>
-                    <th className="text-center py-1.5 px-1 text-blue-400 w-1/3">{opponentName}</th>
+                    <th className="text-center py-1.5 px-1 text-brand-400 w-1/3">{opponentName}</th>
                     <th className="text-left py-1.5 px-2 text-[var(--muted)]">選手</th>
                   </tr>
                 </thead>
@@ -193,14 +193,14 @@ function RunningScoreView({ events, teamName, opponentName, players }: {
                   {qEvents.map((ev, i) => {
                     const scorer = ev.player_id ? players.find(p => p.id === ev.player_id) : null
                     return (
-                      <tr key={i} className={`border-b border-[var(--card-border)]/40 ${ev.team === 'us' ? 'bg-orange-500/5' : 'bg-blue-500/5'}`}>
+                      <tr key={i} className={`border-b border-[var(--card-border)]/40 ${ev.team === 'us' ? 'bg-orange-500/5' : 'bg-brand-500/5'}`}>
                         <td className="text-center py-1.5 px-2 text-[var(--muted)]">{i + 1}</td>
                         <td className={`text-center py-1.5 px-1 font-bold ${ev.team === 'us' ? 'text-orange-400 text-sm' : 'text-white/50'}`}>
                           {ev.our_score_after}
                           {ev.team === 'us' && <span className="text-[9px] ml-0.5 font-normal">(+{ev.points})</span>}
                         </td>
                         <td className="text-center py-1.5 px-1 text-[var(--muted)]">-</td>
-                        <td className={`text-center py-1.5 px-1 font-bold ${ev.team === 'opponent' ? 'text-blue-400 text-sm' : 'text-white/50'}`}>
+                        <td className={`text-center py-1.5 px-1 font-bold ${ev.team === 'opponent' ? 'text-brand-400 text-sm' : 'text-white/50'}`}>
                           {ev.opponent_score_after}
                           {ev.team === 'opponent' && <span className="text-[9px] ml-0.5 font-normal">(+{ev.points})</span>}
                         </td>
@@ -377,9 +377,9 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
   }) {
     const borderClass = isGameEnd
       ? 'border-b-4 border-double border-orange-500'
-      : isQEnd ? `border-b-2 ${color === 'orange' ? 'border-orange-400/70' : 'border-blue-400/70'}`
+      : isQEnd ? `border-b-2 ${color === 'orange' ? 'border-orange-400/70' : 'border-brand-400/70'}`
       : ''
-    const colorClass = color === 'orange' ? 'text-orange-300' : 'text-blue-300'
+    const colorClass = color === 'orange' ? 'text-orange-300' : 'text-brand-300'
 
     if (!mark) return <td className={`py-0.5 px-1 text-center text-[10px] min-w-[56px] ${borderClass}`} />
     return (
@@ -456,7 +456,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                 <td className="text-center py-2 px-3 text-orange-400 font-bold text-base">{totUs}</td>
               </tr>
               <tr>
-                <td className="py-2.5 px-3 text-blue-400 font-bold text-xs truncate max-w-[80px]">{game.opponent}</td>
+                <td className="py-2.5 px-3 text-brand-400 font-bold text-xs truncate max-w-[80px]">{game.opponent}</td>
                 {[1,2,3,4].map(q => (
                   <td key={q} className="text-center py-2 px-3">
                     <Cell val={qScore(q).opp} onCommit={v => {
@@ -465,7 +465,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                     }} />
                   </td>
                 ))}
-                <td className="text-center py-2 px-3 text-blue-400 font-bold text-base">{totOpp}</td>
+                <td className="text-center py-2 px-3 text-brand-400 font-bold text-base">{totOpp}</td>
               </tr>
             </tbody>
           </table>
@@ -543,7 +543,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
       {/* ─ 相手チーム選手 ─ */}
       {oppPlayerList.length > 0 && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-3 py-2 text-[10px] text-blue-400 font-bold uppercase tracking-wide border-b border-[var(--card-border)]">
+          <div className="px-3 py-2 text-[10px] text-brand-400 font-bold uppercase tracking-wide border-b border-[var(--card-border)]">
             {game.opponent} — 選手
           </div>
           <div className="overflow-x-auto">
@@ -567,7 +567,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                   })
                   return (
                     <tr key={p.key} className="border-b border-[var(--card-border)]/50">
-                      <td className="py-2 px-3 text-blue-400 font-bold">{p.number || '—'}</td>
+                      <td className="py-2 px-3 text-brand-400 font-bold">{p.number || '—'}</td>
                       <td className="py-2 pr-2 text-white truncate max-w-[100px] flex items-center gap-1">
                         {isOppSubstitute(p.key) && <span className="text-red-500 text-[11px] font-bold">＼</span>}
                         <span>{p.name}</span>
@@ -577,7 +577,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                         <div className="flex gap-0.5 justify-center">
                           {[1,2,3,4].map(q => (
                             <span key={q} className={`text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center ${
-                              appearedQs.includes(q) ? 'bg-blue-500/30 text-blue-400 border border-blue-500/50' : 'text-[var(--muted)]/30'
+                              appearedQs.includes(q) ? 'bg-brand-500/30 text-brand-400 border border-brand-500/50' : 'text-[var(--muted)]/30'
                             }`}>
                               {q}
                             </span>
@@ -609,7 +609,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
           </span>
           <div className="flex items-center gap-3 text-[10px]">
             <span className="text-orange-400 font-bold">自チーム</span>
-            <span className="text-blue-400 font-bold">{game.opponent}</span>
+            <span className="text-brand-400 font-bold">{game.opponent}</span>
           </div>
         </div>
 
@@ -630,7 +630,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                   <tr className="text-[9px] text-[var(--muted)] border-b border-[var(--card-border)] bg-white/5">
                     <th className="text-center py-1 px-2 w-8">得点</th>
                     <th className="text-center py-1 px-1 text-orange-400 min-w-[60px]">自チーム</th>
-                    <th className="text-center py-1 px-1 text-blue-400 min-w-[60px]">{game.opponent}</th>
+                    <th className="text-center py-1 px-1 text-brand-400 min-w-[60px]">{game.opponent}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -666,7 +666,7 @@ function ScoresheetView({ game, players, statsMap, scoreEvents, oppPlayerList, g
                   <span className="text-[var(--muted)] font-bold">Q{q}</span>
                   {' '}<span className="text-orange-400 font-bold">{qScore(q).us}</span>
                   <span className="text-[var(--muted)] mx-1">-</span>
-                  <span className="text-blue-400 font-bold">{qScore(q).opp}</span>
+                  <span className="text-brand-400 font-bold">{qScore(q).opp}</span>
                 </div>
               ))}
             </div>
@@ -755,6 +755,14 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
     }
     return map
   }, [gameId])
+
+  // そのQに出場したか（スターター or 途中出場）。出場データが無いQは判定不能として null
+  function playedInQuarter(team: 'us'|'opponent', id: string, q: number): boolean | null {
+    const starters = (team === 'us' ? qHomeStarters : qOppStarters).get(q)
+    const subs = (team === 'us' ? qHomeSubs : qOppSubs).get(q)
+    if (!starters && !subs) return null
+    return (starters?.has(id) ?? false) || (subs?.has(id) ?? false)
+  }
 
   const { aMarks, bMarks, aQEndScores, bQEndScores, aEventIdxMap, bEventIdxMap } = useMemo(() => {
     const aMarks = new Map<number, RunMarkData>()
@@ -977,13 +985,13 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     <>
                       <td
                         onClick={openEdit}
-                        style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
+                        style={{border:B, paddingLeft:2, fontSize:8, overflow:'hidden', whiteSpace:'nowrap', cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(238,122,47,0.05)' : undefined}}
                       >
-                        {p.name}{canRename && <span style={{color:'#0ea5e9', fontSize:7, marginLeft:1}}>✎</span>}
+                        {p.name}{canRename && <span style={{color:'#ee7a2f', fontSize:7, marginLeft:1}}>✎</span>}
                       </td>
                       <td
                         onClick={openEdit}
-                        style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9, cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(14,165,233,0.05)' : undefined}}
+                        style={{border:B, textAlign:'center', fontWeight:'bold', fontSize:9, cursor: canRename ? 'pointer' : 'default', background: canRename ? 'rgba(238,122,47,0.05)' : undefined}}
                       >
                         {p.number}
                       </td>
@@ -1240,10 +1248,13 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
         const currentId = isUs
           ? deleteConfirm.ev.player_id
           : oppPlayerList.find(p => deleteConfirm.ev.opp_player_name === `#${p.number} ${p.name}`)?.key
+        const evQuarter = deleteConfirm.ev.quarter
         const candidates = (isUs
           ? players.map(p => ({ id: p.id, label: `#${p.number || '—'} ${p.name}` }))
           : oppPlayerList.map(p => ({ id: p.key, label: `#${p.number} ${p.name}` }))
         ).filter(c => c.id !== currentId)
+          .map(c => ({ ...c, notPlayed: playedInQuarter(isUs ? 'us' : 'opponent', c.id, evQuarter) === false }))
+        const selNotPlayed = changeSel ? (candidates.find(c => c.id === changeSel)?.notPlayed ?? false) : false
         return (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200}} onClick={() => setDeleteConfirm(null)}>
           <div style={{background:'#fff', borderRadius:10, padding:20, maxWidth:320, width:'92%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
@@ -1268,13 +1279,19 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   style={{width:'100%', padding:'8px', borderRadius:6, border:'1px solid #ccc', fontSize:14, marginBottom:8, background:'#fff'}}
                 >
                   <option value="">正しい選手を選択...</option>
-                  {candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  {candidates.map(c => <option key={c.id} value={c.id}>{c.label}{c.notPlayed ? `（Q${evQuarter}未出場）` : ''}</option>)}
                 </select>
+                {selNotPlayed && (
+                  <div style={{background:'#fdeeda', border:'1px solid #ee7a2f', borderRadius:6, padding:'8px 10px', fontSize:11, color:'#c85a14', marginBottom:8}}>
+                    <b>⚠ この選手はQ{evQuarter}に出場していません。</b><br/>
+                    選び間違いがないか確認してください。出場記録の漏れであれば、このまま変更できます。
+                  </div>
+                )}
                 <button
                   disabled={!changeSel}
                   onClick={() => { onChangeEventPlayer(deleteConfirm.idx, deleteConfirm.ev, changeSel); setDeleteConfirm(null) }}
-                  style={{width:'100%', padding:'9px', border:'none', borderRadius:6, background: changeSel ? '#0ea5e9' : '#cbd5e1', color:'white', fontWeight:'bold', cursor: changeSel ? 'pointer' : 'default', fontSize:13}}
-                >この選手に変更する</button>
+                  style={{width:'100%', padding:'9px', border:'none', borderRadius:6, background: !changeSel ? '#cbd5e1' : selNotPlayed ? '#c85a14' : '#ee7a2f', color:'white', fontWeight:'bold', cursor: changeSel ? 'pointer' : 'default', fontSize:13}}
+                >{selNotPlayed ? '未出場ですがこの選手に変更する' : 'この選手に変更する'}</button>
               </div>
             )}
 
@@ -1327,24 +1344,38 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               <div style={{fontSize:11, fontWeight:'bold', color:'#555', marginBottom:4}}>種別（得点）</div>
               <div style={{display:'flex', gap:6}}>
                 {([2,3,1] as const).filter(pts => category !== 'mini' || pts !== 3).map(pts => (
-                  <button key={pts} onClick={() => setAddPoints(pts)} style={{flex:1, padding:'6px', borderRadius:6, border:'2px solid', borderColor: addPoints===pts ? '#0ea5e9' : '#ccc', background: addPoints===pts ? '#e0f2fe' : '#f5f5f5', fontWeight: addPoints===pts ? 'bold' : 'normal', cursor:'pointer', fontSize:12}}>
+                  <button key={pts} onClick={() => setAddPoints(pts)} style={{flex:1, padding:'6px', borderRadius:6, border:'2px solid', borderColor: addPoints===pts ? '#ee7a2f' : '#ccc', background: addPoints===pts ? '#fdeeda' : '#f5f5f5', fontWeight: addPoints===pts ? 'bold' : 'normal', cursor:'pointer', fontSize:12}}>
                     {pts === 1 ? 'FT（1点）' : pts === 2 ? '2P（2点）' : '3P（3点）'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div style={{display:'flex', gap:8}}>
-              <button onClick={() => setAddDialog(false)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:13}}>キャンセル</button>
-              <button
-                onClick={() => {
-                  const playerId = addTeam === 'us' && players[addPlayerIdx] ? players[addPlayerIdx].id : undefined
-                  onAddEvent?.({ quarter: addQuarter, team: addTeam, points: addPoints, player_id: playerId })
-                  setAddDialog(false)
-                }}
-                style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#0ea5e9', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:13}}
-              >追加してスタッツに反映</button>
-            </div>
+            {(() => {
+              const addPlayer = addTeam === 'us' ? players[addPlayerIdx] : undefined
+              const notPlayed = addPlayer ? playedInQuarter('us', addPlayer.id, addQuarter) === false : false
+              return (
+                <>
+                  {notPlayed && addPlayer && (
+                    <div style={{background:'#fdeeda', border:'1px solid #ee7a2f', borderRadius:6, padding:'8px 10px', fontSize:12, color:'#c85a14', marginBottom:12}}>
+                      <b>⚠ #{addPlayer.number} {addPlayer.name} はQ{addQuarter}に出場していません。</b><br/>
+                      選手・クォーターの選び間違いがないか確認してください。出場記録の漏れであれば、このまま追加できます。
+                    </div>
+                  )}
+                  <div style={{display:'flex', gap:8}}>
+                    <button onClick={() => setAddDialog(false)} style={{flex:1, padding:'10px', border:'1px solid #ccc', borderRadius:6, background:'#f5f5f5', cursor:'pointer', fontSize:13}}>キャンセル</button>
+                    <button
+                      onClick={() => {
+                        const playerId = addTeam === 'us' && players[addPlayerIdx] ? players[addPlayerIdx].id : undefined
+                        onAddEvent?.({ quarter: addQuarter, team: addTeam, points: addPoints, player_id: playerId })
+                        setAddDialog(false)
+                      }}
+                      style={{flex:2, padding:'10px', border:'none', borderRadius:6, background: notPlayed ? '#c85a14' : '#ee7a2f', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:13}}
+                    >{notPlayed ? '未出場ですが追加する' : '追加してスタッツに反映'}</button>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -1437,7 +1468,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                   if (n) { if (renameTarget.isHome) onRenamePlayer?.(renameTarget.playerId, n, renameTarget.number); else onRenameOppPlayer?.(renameTarget.playerId, n, renameTarget.number) }
                   setRenameTarget(null)
                 }}
-                style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#0ea5e9', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:14}}
+                style={{flex:2, padding:'10px', border:'none', borderRadius:6, background:'#ee7a2f', color:'white', fontWeight:'bold', cursor:'pointer', fontSize:14}}
               >保存する</button>
             </div>
           </div>
@@ -1788,21 +1819,21 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
         disabled={isDisabled}
         className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left w-full ${
           isSelected
-            ? color === 'orange' ? 'bg-orange-500/20 border-orange-500' : 'bg-blue-500/20 border-blue-500'
+            ? color === 'orange' ? 'bg-orange-500/20 border-orange-500' : 'bg-brand-500/20 border-brand-500'
             : isDisabled ? 'bg-[var(--card)] border-[var(--card-border)] opacity-40'
             : 'bg-[var(--card)] border-[var(--card-border)]'
         }`}
       >
         <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
           isSelected
-            ? color === 'orange' ? 'border-orange-400 text-orange-400' : 'border-blue-400 text-blue-400'
+            ? color === 'orange' ? 'border-orange-400 text-orange-400' : 'border-brand-400 text-brand-400'
             : 'border-[var(--muted)] text-[var(--muted)]'
         }`}>{isSelected ? '✓' : ' '}</span>
-        <span className={`font-bold w-10 ${color === 'orange' ? 'text-orange-400' : 'text-blue-400'}`}>#{number || '—'}</span>
+        <span className={`font-bold w-10 ${color === 'orange' ? 'text-orange-400' : 'text-brand-400'}`}>#{number || '—'}</span>
         <span className={`font-medium ${isSelected ? 'text-white' : 'text-[var(--muted)]'}`}>{name}</span>
         {badge
           ? <span className="ml-auto text-xs font-bold text-red-400">{badge}</span>
-          : isSelected && <span className={`ml-auto text-xs font-medium ${color === 'orange' ? 'text-orange-400' : 'text-blue-400'}`}>コート</span>}
+          : isSelected && <span className={`ml-auto text-xs font-medium ${color === 'orange' ? 'text-orange-400' : 'text-brand-400'}`}>コート</span>}
       </button>
     )
   }
@@ -1817,7 +1848,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
               自チーム <span className={selected.length === 5 ? 'text-green-400 font-bold' : 'text-orange-400 font-bold'}>{selected.length}/5</span>
               {oppPlayers.length > 0 && (() => {
                 const oppNeeded = Math.min(5, oppPlayers.filter(p => !oppDq.has(p.key)).length)
-                return <>　相手 <span className={selectedOpp.length >= oppNeeded ? 'text-green-400 font-bold' : 'text-blue-400 font-bold'}>{selectedOpp.length}/{oppNeeded}</span></>
+                return <>　相手 <span className={selectedOpp.length >= oppNeeded ? 'text-green-400 font-bold' : 'text-brand-400 font-bold'}>{selectedOpp.length}/{oppNeeded}</span></>
               })()}
             </div>
           </div>
@@ -1860,7 +1891,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
         {/* 相手チーム */}
         {oppPlayers.length > 0 && (
           <div>
-            <div className="text-xs font-bold text-blue-400 mb-2 uppercase tracking-wide">相手チーム（{selectedOpp.length}/5）</div>
+            <div className="text-xs font-bold text-brand-400 mb-2 uppercase tracking-wide">相手チーム（{selectedOpp.length}/5）</div>
             <div className="flex flex-col gap-2">
               {oppPlayers.map(p => (
                 <PlayerRow key={p.key} id={p.key} number={p.number} name={p.name}
@@ -3119,7 +3150,7 @@ export default function GamePage() {
           {pending.length > 0 ? (
             <button onClick={saveStats} disabled={saving}
               className="text-[11px] font-bold text-white rounded-xl py-2 px-3 flex-shrink-0"
-              style={{ background: saving ? '#555' : '#0ea5e9' }}>
+              style={{ background: saving ? '#555' : '#ee7a2f' }}>
               {saving ? '保存中…' : `保存(${pending.length})`}
             </button>
           ) : <div className="min-w-[3rem]" />}
@@ -3188,7 +3219,7 @@ export default function GamePage() {
                   <tr className="text-[9px] text-[var(--muted)] border-b border-[var(--card-border)]">
                     <th className="py-1 px-3 text-left">Q</th>
                     <th className="py-1 px-2 text-center text-orange-400">自チーム</th>
-                    <th className="py-1 px-2 text-center text-blue-400">{game.opponent}</th>
+                    <th className="py-1 px-2 text-center text-brand-400">{game.opponent}</th>
                     <th className="py-1 px-3 text-center text-[var(--muted)]">累計</th>
                   </tr>
                 </thead>
@@ -3201,7 +3232,7 @@ export default function GamePage() {
                       <tr key={q} className={`border-b border-[var(--card-border)]/40 ${isLast ? 'bg-orange-500/10 font-bold' : ''}`}>
                         <td className="py-1.5 px-3 text-[var(--muted)]">{q <= 4 ? `Q${q}` : `OT${q-4}`}</td>
                         <td className="py-1.5 px-2 text-center text-orange-400">{qs.us}</td>
-                        <td className="py-1.5 px-2 text-center text-blue-400">{qs.opp}</td>
+                        <td className="py-1.5 px-2 text-center text-brand-400">{qs.opp}</td>
                         <td className="py-1.5 px-3 text-center text-white font-bold tabular-nums">{cumUs} - {cumOpp}</td>
                       </tr>
                     )
@@ -3227,7 +3258,7 @@ export default function GamePage() {
             <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
               自F: {teamFouls}{teamFouls >= 5 && <span className="text-[9px] font-bold">ペナルティ</span>}
             </div>
-            <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${oppTeamFouls >= 5 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
+            <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${oppTeamFouls >= 5 ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
               相F: {oppTeamFouls}{oppTeamFouls >= 5 && <span className="text-[9px] font-bold">ペナルティ</span>}
             </div>
             <button
@@ -3272,16 +3303,16 @@ export default function GamePage() {
                 >+</button>
               </div>
               {/* 相手チーム */}
-              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${oppUsed ? 'bg-blue-500/10 border border-blue-500/30' : ''}`}>
-                <span className="text-[10px] font-bold text-blue-400">相</span>
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${oppUsed ? 'bg-brand-500/10 border border-brand-500/30' : ''}`}>
+                <span className="text-[10px] font-bold text-brand-400">相</span>
                 <button onClick={() => removeLast(setOppTimeoutRecords)} className="w-5 h-5 rounded bg-[var(--card)] border border-[var(--card-border)] text-white text-xs flex items-center justify-center leading-none">-</button>
-                <span className={`text-[10px] font-bold px-1 ${oppUsed ? 'text-blue-400' : 'text-white'}`}>
+                <span className={`text-[10px] font-bold px-1 ${oppUsed ? 'text-brand-400' : 'text-white'}`}>
                   {oppInScope.length}/{scope.limit}{oppInScope.length > 0 ? `（${oppInScope.map(r => r.minute).join('・')}分）` : ''}
                 </span>
                 <button
                   onClick={() => { if (!oppUsed) setTimeoutModal({ team: 'opp' }) }}
                   disabled={oppUsed}
-                  className={`w-5 h-5 rounded border text-xs flex items-center justify-center leading-none ${oppUsed ? 'opacity-30 bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)] cursor-not-allowed' : 'bg-blue-500/20 border-blue-500/50 text-blue-400'}`}
+                  className={`w-5 h-5 rounded border text-xs flex items-center justify-center leading-none ${oppUsed ? 'opacity-30 bg-[var(--card)] border-[var(--card-border)] text-[var(--muted)] cursor-not-allowed' : 'bg-brand-500/20 border-brand-500/50 text-brand-400'}`}
                 >+</button>
               </div>
             </div>
@@ -3401,7 +3432,7 @@ export default function GamePage() {
 
             {/* 相手チームコート */}
             <div>
-              <div className="text-[9px] text-blue-400 mb-1.5 uppercase tracking-wide">
+              <div className="text-[9px] text-brand-400 mb-1.5 uppercase tracking-wide">
                 {subInOppPlayer ? '相手（交代先）' : '相手チーム'}
               </div>
               <div className="flex flex-col gap-1.5">
@@ -3424,13 +3455,13 @@ export default function GamePage() {
                         setSubInPlayer(null)
                       }}
                       className={`flex items-center gap-1 px-2 py-2.5 rounded-xl border transition-all active:scale-95 ${
-                        subInOppPlayer ? 'bg-blue-500/10 border-blue-400 border-dashed'
+                        subInOppPlayer ? 'bg-brand-500/10 border-brand-400 border-dashed'
                         : isFouledOut ? 'bg-red-500/10 border-red-500/40 opacity-60 cursor-not-allowed'
-                        : isSelected ? 'bg-blue-500 border-blue-500'
+                        : isSelected ? 'bg-brand-500 border-brand-500'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${isFouledOut ? 'text-red-400' : 'text-blue-300'}`}>#{player.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${isFouledOut ? 'text-red-400' : 'text-brand-300'}`}>#{player.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1 text-left">{player.name}</span>
                       {isFouledOut
                         ? <span className="text-[9px] text-red-400 font-bold flex-shrink-0 ml-1">退場</span>
@@ -3473,8 +3504,8 @@ export default function GamePage() {
 
           {/* 相手選手選択中 */}
           {selectedOppPlayer && (
-            <div className="bg-[var(--card)] border border-blue-500/40 rounded-xl px-3 py-2">
-              <div className="text-sm font-bold text-blue-300">#{selectedOppPlayer.number} {selectedOppPlayer.name}</div>
+            <div className="bg-[var(--card)] border border-brand-500/40 rounded-xl px-3 py-2">
+              <div className="text-sm font-bold text-brand-300">#{selectedOppPlayer.number} {selectedOppPlayer.name}</div>
             </div>
           )}
 
@@ -3495,7 +3526,7 @@ export default function GamePage() {
                   <button
                     key={pts}
                     onClick={() => updateOpponentScore(pts, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}
-                    className="flex-1 py-4 rounded-xl bg-blue-500/20 border border-blue-500/50 text-blue-300 font-bold text-2xl active:scale-95 transition-all"
+                    className="flex-1 py-4 rounded-xl bg-brand-500/20 border border-brand-500/50 text-brand-300 font-bold text-2xl active:scale-95 transition-all"
                   >
                     +{pts}
                   </button>
@@ -3554,7 +3585,7 @@ export default function GamePage() {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-blue-400 mb-1.5 uppercase tracking-wide">相手ベンチ</div>
+                <div className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wide">相手ベンチ</div>
                 <div className="flex flex-col gap-1.5">
                   {oppBench.length > 0 ? oppBench.map(p => {
                     const benchFouledOut = isOppDisqualified(p.key)
@@ -3571,15 +3602,15 @@ export default function GamePage() {
                       }}
                       className={`flex items-center gap-1 px-2 py-2 rounded-lg border text-left transition-all active:scale-95 ${
                         benchFouledOut ? 'opacity-30 cursor-not-allowed bg-red-500/10 border-red-500/20'
-                        : subInOppPlayer?.key === p.key ? 'bg-blue-500/20 border-blue-500'
+                        : subInOppPlayer?.key === p.key ? 'bg-brand-500/20 border-brand-500'
                         : 'bg-[var(--card)] border-[var(--card-border)]'
                       }`}
                     >
-                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${benchFouledOut ? 'text-red-400' : 'text-blue-300'}`}>#{p.number || '—'}</span>
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-8 ${benchFouledOut ? 'text-red-400' : 'text-brand-300'}`}>#{p.number || '—'}</span>
                       <span className="text-xs text-white truncate flex-1">{p.name}</span>
                       {benchFouledOut
                         ? <span className="ml-auto text-[9px] text-red-400 flex-shrink-0">退場</span>
-                        : subInOppPlayer?.key === p.key && <span className="ml-auto text-[9px] text-blue-400 flex-shrink-0">IN</span>}
+                        : subInOppPlayer?.key === p.key && <span className="ml-auto text-[9px] text-brand-400 flex-shrink-0">IN</span>}
                     </button>
                     )
                   }) : <p className="text-[10px] text-[var(--muted)] py-1">なし</p>}
@@ -3648,13 +3679,13 @@ export default function GamePage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold text-white mb-1 text-center">相手ファウル</h2>
-            <p className="text-sm text-blue-300 text-center mb-1">{foulOppDialog.playerName}</p>
+            <p className="text-sm text-brand-300 text-center mb-1">{foulOppDialog.playerName}</p>
             <p className="text-xs text-[var(--muted)] text-center mb-4">自チームのフリースロー数を選択</p>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 0)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースローなし (P)</button>
-              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 1)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー1本 (P1)</button>
-              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 2)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー2本 (P2)</button>
-              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 3)} className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー3本 (P3)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 0)} className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースローなし (P)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 1)} className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー1本 (P1)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 2)} className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー2本 (P2)</button>
+              <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, 3)} className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95">フリースロー3本 (P3)</button>
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -1)} className="bg-yellow-600/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 rounded-lg py-3 font-semibold transition-all active:scale-95">テクニカル (T)</button>
               <button onClick={() => recordOppFoulWithFT(foulOppDialog.playerKey!, -2)} className="bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 rounded-lg py-3 font-semibold transition-all active:scale-95">アンスポ (U)</button>
             </div>
@@ -3684,7 +3715,7 @@ export default function GamePage() {
 
             <a href="/upgrade"
               className="block w-full font-bold text-white rounded-2xl py-4 text-base mb-3 active:scale-95 transition-transform"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
               登録する →
             </a>
             <button onClick={() => setShowPaywall(false)}
@@ -3787,25 +3818,25 @@ export default function GamePage() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => recordFoulWithFT(foulDialog.playerId!, 0)}
-                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+                className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
               >
                 フリースローなし
               </button>
               <button
                 onClick={() => recordFoulWithFT(foulDialog.playerId!, 1)}
-                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+                className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
               >
                 フリースロー1本
               </button>
               <button
                 onClick={() => recordFoulWithFT(foulDialog.playerId!, 2)}
-                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+                className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
               >
                 フリースロー2本
               </button>
               <button
                 onClick={() => recordFoulWithFT(foulDialog.playerId!, 3)}
-                className="bg-blue-600/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
+                className="bg-brand-600/20 hover:bg-brand-500/30 border border-brand-500/50 text-brand-300 rounded-lg py-3 font-semibold transition-all active:scale-95"
               >
                 フリースロー3本
               </button>
