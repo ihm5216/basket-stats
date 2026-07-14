@@ -114,10 +114,10 @@ export default function NewTeamPage() {
                 onClick={() => setCategory(opt.key)}
                 className="text-left rounded-xl p-3 border transition-colors"
                 style={category === opt.key
-                  ? { background: 'rgba(14,165,233,0.12)', borderColor: 'rgba(14,165,233,0.6)' }
+                  ? { background: 'rgba(238,122,47,0.12)', borderColor: 'rgba(238,122,47,0.6)' }
                   : { background: 'var(--card)', borderColor: 'var(--card-border)' }}
               >
-                <div className="font-bold text-sm" style={{ color: category === opt.key ? '#38bdf8' : '#fff' }}>{opt.label}</div>
+                <div className="font-bold text-sm" style={{ color: category === opt.key ? '#f0a04b' : '#fff' }}>{opt.label}</div>
                 <div className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>{opt.sub}</div>
               </button>
             ))}

@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
+/* ブランドカラー（LPのオレンジと共通）: bg-brand-500 等のユーティリティを生成 */
+@theme {
+  --color-brand-300: #f6bd82;
+  --color-brand-400: #f0a04b;
+  --color-brand-500: #ee7a2f;
+  --color-brand-600: #c85a14;
+}
+
 :root {
   --background: #091929;
   --foreground: #e8f4fd;
-  --primary: #0ea5e9;
-  --primary-dark: #0284c7;
+  --primary: #ee7a2f;
+  --primary-dark: #c85a14;
   --card: #0d2235;
   --card-border: #1a3a56;
   --muted: #6ba8c8;

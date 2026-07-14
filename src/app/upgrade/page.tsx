@@ -57,14 +57,14 @@ function UpgradeContent() {
         )}
 
         {/* 料金カード */}
-        <div className="card mb-4" style={{ border: '2px solid rgba(14,165,233,0.5)' }}>
+        <div className="card mb-4" style={{ border: '2px solid rgba(238,122,47,0.5)' }}>
           <div className="text-center">
-            <div className="text-xs font-bold mb-1" style={{ color: '#38bdf8' }}>スタンダードプラン</div>
+            <div className="text-xs font-bold mb-1" style={{ color: '#f0a04b' }}>スタンダードプラン</div>
             <div className="text-5xl font-bold text-white mb-1">
               ¥500<span className="text-base font-normal" style={{ color: 'var(--muted)' }}>/月</span>
             </div>
             <div className="text-xs mb-1" style={{ color: 'var(--muted)' }}>チーム全員が無制限で利用可能</div>
-            <div className="text-xs font-bold mb-6" style={{ color: '#38bdf8' }}>
+            <div className="text-xs font-bold mb-6" style={{ color: '#f0a04b' }}>
               ≈ 選手1人あたり約<span className="text-lg">33</span>円/月
             </div>
 
@@ -82,7 +82,7 @@ function UpgradeContent() {
               onClick={handleCheckout}
               disabled={loading}
               className="w-full font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}
             >
               {loading ? '移動中…' : '今すぐ登録する →'}
             </button>

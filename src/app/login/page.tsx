@@ -130,7 +130,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-white mb-1 text-center">ログイン</h1>
         <p className="text-xs text-center mb-7" style={{ color: 'var(--muted)' }}>
           アカウントをお持ちでない方は{' '}
-          <Link href="/signup" className="text-[#38bdf8] underline">無料登録はこちら</Link>
+          <Link href="/signup" className="text-[#f0a04b] underline">無料登録はこちら</Link>
         </p>
 
         <InAppBrowserNotice />
@@ -191,7 +191,7 @@ export default function LoginPage() {
             {/* Magic Link（メール登録の方の唯一のログイン。パスワード不要で全メールOK） */}
             <button onClick={() => { setMode('magic'); setError('') }} disabled={loading}
               className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
-              style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', color: '#38bdf8' }}>
+              style={{ background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.4)', color: '#f0a04b' }}>
               <span className="text-xl ml-3">✉️</span>
               <span className="flex-1 text-left">メールでログイン</span>
               <span className="text-[10px] mr-3 font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>パスワード不要</span>
@@ -217,7 +217,7 @@ export default function LoginPage() {
               autoComplete="email" autoFocus />
             <button type="submit" disabled={loading || !email}
               className="w-full text-center font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
               {loading ? '送信中…' : '✉️ ログインリンクを送る'}
             </button>
           </form>
@@ -239,7 +239,7 @@ export default function LoginPage() {
               autoComplete="current-password" />
             <button type="submit" disabled={loading}
               className="w-full text-center font-bold text-white rounded-2xl py-4 text-base active:scale-95 transition-transform disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
               {loading ? 'ログイン中…' : 'ログイン'}
             </button>
           </form>

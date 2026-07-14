@@ -261,7 +261,7 @@ export default function TeamPage() {
                       }}
                       className="text-xs px-3 py-1.5 rounded-full border transition-colors"
                       style={active
-                        ? { background: 'rgba(14,165,233,0.15)', borderColor: 'rgba(14,165,233,0.6)', color: '#38bdf8', fontWeight: 700 }
+                        ? { background: 'rgba(238,122,47,0.15)', borderColor: 'rgba(238,122,47,0.6)', color: '#f0a04b', fontWeight: 700 }
                         : { background: 'var(--card)', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
                     >
                       {cat === 'general' ? '一般 / 中高' : 'ミニバス'}

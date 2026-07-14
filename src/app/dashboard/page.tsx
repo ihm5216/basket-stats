@@ -167,8 +167,8 @@ function DashboardContent() {
         {/* ── 有料プラン バッジ ── */}
         {trial?.hasSubscription && (
           <div className="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl"
-            style={{ background: 'rgba(14,165,233,0.1)', border: '1px solid rgba(14,165,233,0.3)' }}>
-            <div className="flex items-center gap-2 text-sm" style={{ color: '#38bdf8' }}>
+            style={{ background: 'rgba(238,122,47,0.1)', border: '1px solid rgba(238,122,47,0.3)' }}>
+            <div className="flex items-center gap-2 text-sm" style={{ color: '#f0a04b' }}>
               <span>⭐</span><span className="font-bold">スタンダードプラン 利用中</span>
             </div>
             <button
@@ -279,7 +279,7 @@ function TrialStatusBar({ trial }: { trial: TrialInfo }) {
           <div className="flex items-center justify-between mb-1">
             <span className="text-sm font-bold text-red-400">🔒 無料体験期間終了</span>
             <Link href="/upgrade" className="text-xs font-bold text-white rounded-xl px-3 py-1.5 active:scale-95 transition-transform"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}>
+              style={{ background: 'linear-gradient(135deg, #ee7a2f, #c85a14)' }}>
               登録する →
             </Link>
           </div>
@@ -292,16 +292,16 @@ function TrialStatusBar({ trial }: { trial: TrialInfo }) {
   }
 
   return (
-    <div className="mb-4 rounded-2xl px-4 py-3" style={{ background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(14,165,233,0.25)' }}>
+    <div className="mb-4 rounded-2xl px-4 py-3" style={{ background: 'rgba(238,122,47,0.08)', border: '1px solid rgba(238,122,47,0.25)' }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold" style={{ color: '#38bdf8' }}>
+        <span className="text-xs font-bold" style={{ color: '#f0a04b' }}>
           🎮 無料体験中 — 残り {trial.remaining} 試合
         </span>
         <Link href="/upgrade" className="text-xs underline" style={{ color: 'var(--muted)' }}>プランを見る</Link>
       </div>
       <div className="flex gap-1.5">
         {dots.map((used, i) => (
-          <div key={i} className="flex-1 h-2 rounded-full" style={{ background: used ? '#0ea5e9' : 'rgba(14,165,233,0.2)' }} />
+          <div key={i} className="flex-1 h-2 rounded-full" style={{ background: used ? '#ee7a2f' : 'rgba(238,122,47,0.2)' }} />
         ))}
       </div>
       <p className="text-[10px] mt-1.5" style={{ color: 'var(--muted)' }}>
