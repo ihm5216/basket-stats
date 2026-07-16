@@ -709,7 +709,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
   const [addDialog, setAddDialog] = useState(false)
   const [addTeam, setAddTeam] = useState<'us'|'opponent'>('us')
   const [addPlayerIdx, setAddPlayerIdx] = useState(0)
-  const [addOppKey, setAddOppKey] = useState('')  // 相手選手のkey（''は指定なし）
+  const [addOppKey, setAddOppKey] = useState('')  // 相手選手のkey（''は指定なし、'__direct__'は番号直接入力）
+  const [addOppNum, setAddOppNum] = useState('')  // 相手選手リスト未登録時の背番号直接入力
   const [addPoints, setAddPoints] = useState<1|2|3>(2)
   const [addQuarter, setAddQuarter] = useState(1)
   const [foulDeleteConfirm, setFoulDeleteConfirm] = useState<{playerId: string; isHome: boolean; foulType: keyof OppFoulData; notation: string; playerNum: string} | null>(null)
@@ -1184,7 +1185,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                 onClick={() => {
                   // 直近の記録があるQ（なければ現在のQ）を初期選択にする
                   const lastQ = scoreEvents.length ? scoreEvents[scoreEvents.length - 1].quarter : (game.quarter ?? 1)
-                  setAddDialog(true); setAddTeam('us'); setAddPlayerIdx(0); setAddOppKey(''); setAddPoints(2); setAddQuarter(Math.min(Math.max(lastQ, 1), 4))
+                  setAddDialog(true); setAddTeam('us'); setAddPlayerIdx(0); setAddOppKey(''); setAddOppNum(''); setAddPoints(2); setAddQuarter(Math.min(Math.max(lastQ, 1), 4))
                 }}
                 style={{fontSize:9, padding:'1px 5px', background:'#1a5a2e', color:'#6ee7a0', border:'1px solid #2d8a50', borderRadius:3, cursor:'pointer', lineHeight:1.4}}
               >＋ 手動追加</button>
@@ -1333,13 +1334,26 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
               </div>
             )}
 
-            {addTeam === 'opponent' && oppPlayerList.length > 0 && (
+            {addTeam === 'opponent' && (
               <div style={{marginBottom:10}}>
                 <div style={{fontSize:11, fontWeight:'bold', color:'#555', marginBottom:4}}>選手</div>
-                <select value={addOppKey} onChange={e => setAddOppKey(e.target.value)} style={{width:'100%', padding:'6px', borderRadius:6, border:'1px solid #ccc', fontSize:13, background:'#fff'}}>
-                  <option value="">指定しない（番号なし）</option>
-                  {oppPlayerList.map(p => <option key={p.key} value={p.key}>#{p.number} {p.name}</option>)}
-                </select>
+                {oppPlayerList.length > 0 && (
+                  <select value={addOppKey} onChange={e => setAddOppKey(e.target.value)} style={{width:'100%', padding:'6px', borderRadius:6, border:'1px solid #ccc', fontSize:13, background:'#fff', marginBottom:6}}>
+                    <option value="">指定しない（番号なし）</option>
+                    {oppPlayerList.map(p => <option key={p.key} value={p.key}>#{p.number} {p.name}</option>)}
+                    <option value="__direct__">リストにない番号を直接入力…</option>
+                  </select>
+                )}
+                {(oppPlayerList.length === 0 || addOppKey === '__direct__') && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={addOppNum}
+                    onChange={e => setAddOppNum(e.target.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '').slice(0, 3))}
+                    placeholder="背番号を入力（空欄なら番号なし）"
+                    style={{width:'100%', padding:'6px', borderRadius:6, border:'1px solid #ccc', fontSize:13, background:'#fff', boxSizing:'border-box'}}
+                  />
+                )}
               </div>
             )}
 
@@ -1365,7 +1379,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
 
             {(() => {
               const addPlayer = addTeam === 'us' ? players[addPlayerIdx] : undefined
-              const addOpp = addTeam === 'opponent' && addOppKey ? oppPlayerList.find(p => p.key === addOppKey) : undefined
+              const addOpp = addTeam === 'opponent' && addOppKey && addOppKey !== '__direct__' ? oppPlayerList.find(p => p.key === addOppKey) : undefined
+              const addOppDirectNum = addTeam === 'opponent' && (oppPlayerList.length === 0 || addOppKey === '__direct__') ? addOppNum.trim() : ''
               const notPlayed = addPlayer ? playedInQuarter('us', addPlayer.id, addQuarter) === false
                 : addOpp ? playedInQuarter('opponent', addOpp.key, addQuarter) === false
                 : false
@@ -1383,7 +1398,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
                     <button
                       onClick={() => {
                         const playerId = addTeam === 'us' && players[addPlayerIdx] ? players[addPlayerIdx].id : undefined
-                        const oppName = addOpp ? `#${addOpp.number} ${addOpp.name}` : undefined
+                        const oppName = addOpp ? `#${addOpp.number} ${addOpp.name}` : addOppDirectNum ? `#${addOppDirectNum}` : undefined
                         onAddEvent?.({ quarter: addQuarter, team: addTeam, points: addPoints, player_id: playerId, opp_player_name: oppName })
                         setAddDialog(false)
                       }}
