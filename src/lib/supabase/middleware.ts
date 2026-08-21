@@ -44,6 +44,8 @@ export async function updateSession(request: NextRequest) {
     || pathname.startsWith('/api/team-login')
     // Stripe Webhookは認証Cookieを持たない外部からのPOST。署名検証(STRIPE_WEBHOOK_SECRET)で保護される
     || pathname === '/api/stripe/webhook'
+    // Vercel Cronからの死活監視。認証Cookieを持たないためここで通す（CRON_SECRETで保護）
+    || pathname === '/api/keepalive'
 
   if (!user && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', request.url))
