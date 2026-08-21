@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useEffect } from 'react'
 import { authErrorMessage } from '@/lib/authError'
 import InAppBrowserNotice from '@/components/InAppBrowserNotice'
+import { useInAppBrowser } from '@/lib/useInAppBrowser'
 
 type Mode = 'top' | 'magic' | 'password' | 'team' | 'sent'
 
@@ -20,6 +21,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('top')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // アプリ内ブラウザではGoogleが必ず失敗するので、導線の順番を入れ替える
+  const isInApp = useInAppBrowser()
 
   // URLパラメータのエラーを表示
   useEffect(() => {
@@ -117,6 +120,36 @@ export default function LoginPage() {
     )
   }
 
+  // ── 代表者ログインのボタン（アプリ内ブラウザかどうかで表示順を入れ替える）──
+  const googleButton = (
+    <button onClick={() => handleOAuth('google')} disabled={loading || isInApp}
+      className={`w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm transition-transform border ${isInApp ? 'opacity-45 cursor-not-allowed' : 'active:scale-95'}`}
+      style={{ background: 'white', color: '#222', borderColor: '#ddd' }}>
+      <svg width="20" height="20" viewBox="0 0 48 48" className="ml-3 flex-shrink-0">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      <span className="flex-1 text-left">Googleでログイン</span>
+      <span className="text-[10px] mr-3 font-normal text-right leading-tight whitespace-pre-line" style={{ color: '#888' }}>
+        {isInApp ? 'この画面では\n使えません' : 'YouTube / Gmail'}
+      </span>
+    </button>
+  )
+
+  const magicButton = (
+    <button onClick={() => { setMode('magic'); setError('') }} disabled={loading}
+      className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
+      style={isInApp
+        ? { background: 'linear-gradient(135deg, #ee7a2f, #c85a14)', color: 'white', border: '1px solid rgba(238,122,47,0.4)' }
+        : { background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.4)', color: '#f0a04b' }}>
+      <span className="text-xl ml-3">✉️</span>
+      <span className="flex-1 text-left">メールでログイン</span>
+      <span className="text-[10px] mr-3 font-normal" style={{ color: isInApp ? 'rgba(255,255,255,0.85)' : 'rgba(56,189,248,0.7)' }}>パスワード不要</span>
+    </button>
+  )
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-5 py-12">
 
@@ -174,28 +207,9 @@ export default function LoginPage() {
               チームを作る・管理する方（代表者）
             </div>
 
-            {/* Google */}
-            <button onClick={() => handleOAuth('google')} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform border"
-              style={{ background: 'white', color: '#222', borderColor: '#ddd' }}>
-              <svg width="20" height="20" viewBox="0 0 48 48" className="ml-3 flex-shrink-0">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-              <span className="flex-1 text-left">Googleでログイン</span>
-              <span className="text-[10px] mr-3 font-normal" style={{ color: '#888' }}>YouTube / Gmail</span>
-            </button>
-
-            {/* Magic Link（メール登録の方の唯一のログイン。パスワード不要で全メールOK） */}
-            <button onClick={() => { setMode('magic'); setError('') }} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
-              style={{ background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.4)', color: '#f0a04b' }}>
-              <span className="text-xl ml-3">✉️</span>
-              <span className="flex-1 text-left">メールでログイン</span>
-              <span className="text-[10px] mr-3 font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>パスワード不要</span>
-            </button>
+            {/* アプリ内ブラウザでは動くほう（メール）を先に出す */}
+            {isInApp ? magicButton : googleButton}
+            {isInApp ? googleButton : magicButton}
 
           </div>
         )}

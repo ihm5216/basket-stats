@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { authErrorMessage } from '@/lib/authError'
 import InAppBrowserNotice from '@/components/InAppBrowserNotice'
+import { useInAppBrowser } from '@/lib/useInAppBrowser'
 
 type Step = 'top' | 'email' | 'sent'
 
@@ -14,6 +15,8 @@ export default function SignupPage() {
   const [step, setStep] = useState<Step>('top')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // アプリ内ブラウザではGoogleが必ず失敗するので、導線の順番を入れ替える
+  const isInApp = useInAppBrowser()
 
   // ── OAuth共通 ────────────────────────────────
   async function handleOAuth(provider: 'google' | 'apple') {
@@ -81,6 +84,42 @@ export default function SignupPage() {
     )
   }
 
+  // ── 登録ボタン（アプリ内ブラウザかどうかで表示順を入れ替える）──
+  const googleButton = (
+    <button onClick={() => handleOAuth('google')} disabled={loading || isInApp}
+      className={`w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm transition-transform border ${isInApp ? 'opacity-45 cursor-not-allowed' : 'active:scale-95'}`}
+      style={{ background: 'white', color: '#222', borderColor: '#ddd' }}>
+      <svg width="20" height="20" viewBox="0 0 48 48" className="ml-3 flex-shrink-0">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      <div className="flex-1 text-left">
+        <div>Googleで始める</div>
+        <div className="text-[10px] font-normal" style={{ color: '#888' }}>
+          {isInApp ? 'この画面では使えません（ブラウザで開くと使えます）' : 'YouTube・Gmailをお持ちの方におすすめ'}
+        </div>
+      </div>
+    </button>
+  )
+
+  const emailButton = (
+    <button onClick={() => { setStep('email'); setError('') }} disabled={loading}
+      className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
+      style={isInApp
+        ? { background: 'linear-gradient(135deg, #ee7a2f, #c85a14)', color: 'white', border: '1px solid rgba(238,122,47,0.4)' }
+        : { background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.4)', color: '#f0a04b' }}>
+      <span className="text-xl ml-3">✉️</span>
+      <div className="flex-1 text-left">
+        <div>メールアドレスで登録</div>
+        <div className="text-[10px] font-normal" style={{ color: isInApp ? 'rgba(255,255,255,0.85)' : 'rgba(56,189,248,0.7)' }}>
+          Yahoo!・docomo・iCloud などどのメールでもOK
+        </div>
+      </div>
+    </button>
+  )
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-5 py-12">
       <Link href="/" className="flex items-center gap-2 mb-8">
@@ -108,45 +147,25 @@ export default function SignupPage() {
           <div className="flex flex-col gap-3">
 
             <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
-              一番簡単な方法
+              {isInApp ? 'この画面ですぐ登録できます' : '一番簡単な方法'}
             </div>
 
-            {/* Google */}
-            <button onClick={() => handleOAuth('google')} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform border"
-              style={{ background: 'white', color: '#222', borderColor: '#ddd' }}>
-              <svg width="20" height="20" viewBox="0 0 48 48" className="ml-3 flex-shrink-0">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-              <div className="flex-1 text-left">
-                <div>Googleで始める</div>
-                <div className="text-[10px] font-normal" style={{ color: '#888' }}>YouTube・Gmailをお持ちの方におすすめ</div>
-              </div>
-            </button>
-
-            {/* Apple ログインは Supabase 側のプロバイダ設定（要 Apple Developer 契約）が
-                完了するまで非表示。設定後に復活させること。 */}
+            {/* アプリ内ブラウザでは動くほう（メール）を先頭に出す */}
+            {isInApp ? emailButton : googleButton}
 
             {/* 区切り */}
             <div className="flex items-center gap-3 my-1">
               <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
-              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>またはメールアドレスで登録（Yahoo!等）</span>
+              <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                {isInApp ? 'ブラウザで開いた場合はこちら' : 'またはメールアドレスで登録（Yahoo!等）'}
+              </span>
               <div className="flex-1 h-px" style={{ background: 'var(--card-border)' }} />
             </div>
 
-            {/* メール登録 */}
-            <button onClick={() => { setStep('email'); setError('') }} disabled={loading}
-              className="w-full flex items-center gap-3 rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-transform"
-              style={{ background: 'rgba(238,122,47,0.12)', border: '1px solid rgba(238,122,47,0.4)', color: '#f0a04b' }}>
-              <span className="text-xl ml-3">✉️</span>
-              <div className="flex-1 text-left">
-                <div>メールアドレスで登録</div>
-                <div className="text-[10px] font-normal" style={{ color: 'rgba(56,189,248,0.7)' }}>Yahoo!・docomo・iCloud などどのメールでもOK</div>
-              </div>
-            </button>
+            {isInApp ? googleButton : emailButton}
+
+            {/* Apple ログインは Supabase 側のプロバイダ設定（要 Apple Developer 契約）が
+                完了するまで非表示。設定後に復活させること。 */}
 
             {/* LINE（近日公開）*/}
             <button disabled

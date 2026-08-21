@@ -1,48 +1,57 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useInAppBrowser } from '@/lib/useInAppBrowser'
 
-// LINE等のアプリ内ブラウザ（WebView）を検出する。
-// これらの環境ではGoogleが「Use secure browsers」ポリシーで
-// OAuthログインをブロックする（エラー403: disallowed_useragent）ため、
-// ユーザーに「外部ブラウザで開く」か「メール登録」を案内する。
-function detectInAppBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent || ''
-  const patterns = [
-    /Line\//i,            // LINE
-    /FBAN|FBAV|FB_IAB/i,  // Facebook
-    /Instagram/i,         // Instagram
-    /Messenger/i,         // Messenger
-    /Twitter/i,           // X / Twitter
-    /TikTok|musical_ly/i, // TikTok
-    /KAKAOTALK/i,         // KakaoTalk
-    /Snapchat/i,          // Snapchat
-    /; wv\)/i,            // 汎用Android WebView
-  ]
-  return patterns.some(p => p.test(ua))
-}
-
+/**
+ * アプリ内ブラウザ（LINE・Instagram等）で開かれたときの案内。
+ *
+ * SNSのプロフィールリンクから来た訪問者は全員ここを通るので、
+ * 長い警告でファーストビューを潰さないよう1〜2行に抑える。
+ * 「メール登録ならこのまま進める」ことを先に伝え、
+ * Chrome/Safariへ移りたい人向けにURLコピーを用意する。
+ */
 export default function InAppBrowserNotice() {
-  const [show, setShow] = useState(false)
+  const isInApp = useInAppBrowser()
+  const [copied, setCopied] = useState(false)
 
-  useEffect(() => {
-    setShow(detectInAppBrowser())
-  }, [])
+  if (!isInApp) return null
 
-  if (!show) return null
+  async function copyLink() {
+    const url = window.location.href
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      // clipboard APIが使えないWebView向けのフォールバック
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy'); setCopied(true) } catch { /* 失敗時は何も出さない */ }
+      document.body.removeChild(ta)
+    }
+    setTimeout(() => setCopied(false), 3000)
+  }
 
   return (
-    <div className="w-full mb-5 rounded-2xl border-2 border-yellow-500/50 bg-yellow-500/10 px-4 py-3">
-      <p className="text-yellow-300 text-sm font-bold mb-1.5">⚠️ アプリ内ブラウザで開いています</p>
-      <p className="text-yellow-100/85 text-xs leading-relaxed mb-2">
-        この画面（LINEなどの簡易ブラウザ）では、Googleの仕様で「Googleで登録／ログイン」が
-        ブロックされます。下のどちらかでご利用ください。
+    <div
+      className="w-full mb-4 rounded-xl px-3.5 py-2.5"
+      style={{ background: 'rgba(234,179,8,0.10)', border: '1px solid rgba(234,179,8,0.35)' }}
+    >
+      <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(254,240,138,0.95)' }}>
+        アプリ内ブラウザのため<span className="font-bold">Googleログインは使えません</span>。下の<span className="font-bold">メールのボタン</span>ならこのまま進めます。
       </p>
-      <ul className="text-yellow-100/85 text-xs leading-relaxed list-disc pl-4 space-y-1">
-        <li>右上の「⋯」または共有マーク →「ブラウザで開く」でChrome/Safariで開く</li>
-        <li>または下の「<span className="font-bold">メールアドレスで登録</span>」を使う（この画面でも使えます）</li>
-      </ul>
+      <button
+        type="button"
+        onClick={copyLink}
+        className="mt-2 text-[11px] font-bold underline active:opacity-60"
+        style={{ color: 'rgba(254,240,138,0.95)' }}
+      >
+        {copied ? '✓ コピーしました。Safari/Chromeに貼り付けてください' : '🔗 リンクをコピーしてブラウザで開く'}
+      </button>
     </div>
   )
 }
