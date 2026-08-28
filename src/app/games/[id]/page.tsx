@@ -1647,36 +1647,62 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
     return lines.join('\n')
   }
 
-  async function shareResult() {
-    // 「LINE共有」ボタンはOSの共有シートを挟まずLINEへ直行する。
-    // スキームは line.me/R/share（旧 R/msg/text は約4,000文字超で HTTP 400。
-    // R/share は8,000文字超でも通ることをcurlで確認済み・2026-08-28）。
-    // 念のため上限を設け、超えたら選手の内訳→選手行の順で段階的に短縮する。
-    const LINE_URL_MAX = 6000
-    for (const t of [buildShareText(), buildShareText('noDetail')]) {
-      const url = `https://line.me/R/share?text=${encodeURIComponent(t)}`
-      if (url.length <= LINE_URL_MAX) {
-        window.open(url, '_blank')
-        return
-      }
+  // スマホ判定（iPadのデスクトップ表示モードはMacintosh UA＋タッチで見分ける）
+  function isMobileDevice(): boolean {
+    if (typeof navigator === 'undefined') return false
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      || (navigator.userAgent.includes('Macintosh') && typeof document !== 'undefined' && 'ontouchend' in document)
+  }
+
+  // テキストをコピーして完了表示（クリップボード非対応時はexecCommandフォールバック）
+  async function copyShareText() {
+    const text = buildShareText()
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch { return }
     }
-    // summary は必ず短いのでそのまま開く（詳細は共有リンク先で見られる）
-    window.open(`https://line.me/R/share?text=${encodeURIComponent(buildShareText('summary'))}`, '_blank')
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 3000)
+  }
+
+  async function shareResult() {
+    // スマホ: LINEアプリへ直行（line.me/R/share。旧 R/msg/text は約4,000文字超で
+    // HTTP 400。R/share は8,000文字超でも通ることをcurlで確認済み・2026-08-28）。
+    // 念のため上限を設け、超えたら選手の内訳→選手行の順で段階的に短縮する。
+    if (isMobileDevice()) {
+      const LINE_URL_MAX = 6000
+      for (const t of [buildShareText(), buildShareText('noDetail')]) {
+        const url = `https://line.me/R/share?text=${encodeURIComponent(t)}`
+        if (url.length <= LINE_URL_MAX) {
+          window.open(url, '_blank')
+          return
+        }
+      }
+      // summary は必ず短いのでそのまま開く（詳細は共有リンク先で見られる）
+      window.open(`https://line.me/R/share?text=${encodeURIComponent(buildShareText('summary'))}`, '_blank')
+      return
+    }
+    // PC: line.me はLINEアプリに繋がらずホームページへ飛んでしまうため、
+    // テキストを自動コピーして「LINEに貼り付けてください」の案内を出す
+    await copyShareText()
   }
 
   // 「共有」ボタン: OSの共有シート（メール・メッセージ・メモ等）。
   // 非対応ブラウザではテキストをコピーして「コピー済」を表示する。
   async function shareOther() {
-    const text = buildShareText()
     if (typeof navigator !== 'undefined' && navigator.share) {
-      try { await navigator.share({ text }) } catch { /* ユーザーキャンセル等 */ }
+      try { await navigator.share({ text: buildShareText() }) } catch { /* ユーザーキャンセル等 */ }
       return
     }
-    try {
-      await navigator.clipboard.writeText(text)
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2000)
-    } catch { /* ignore */ }
+    await copyShareText()
   }
 
   function printScoresheet() {
@@ -1700,7 +1726,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
               onClick={shareOther}
               className="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted)] text-sm font-bold px-3 py-1.5 rounded-lg active:opacity-80"
             >
-              {shareCopied ? '✓ コピー済' : '↗ 共有'}
+              ↗ 共有
             </button>
             <button
               onClick={shareResult}
@@ -1711,6 +1737,12 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
             </button>
           </div>
         </div>
+        {/* コピー完了の案内（PCのLINE共有・共有シート非対応ブラウザで表示） */}
+        {shareCopied && (
+          <div className="mt-2 bg-green-500/10 border border-green-500/40 rounded-lg px-3 py-2 text-sm text-green-300 print:hidden">
+            ✓ スタッツをコピーしました。LINEなど送りたいアプリに貼り付けてください
+          </div>
+        )}
         <div className="mt-3 flex items-center justify-between">
           <div>
             <div className="text-xs text-[var(--muted)] mb-0.5">vs {game.opponent}</div>
