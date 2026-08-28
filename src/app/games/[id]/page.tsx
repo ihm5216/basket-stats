@@ -1595,7 +1595,9 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   const won = displayScore > game.opponent_score
   const lost = displayScore < game.opponent_score
 
-  function buildShareText() {
+  // level: 'full'=全選手の内訳つき / 'noDetail'=選手は得点のみ / 'summary'=選手行なし
+  // LINEの共有URLは長すぎると400エラーになるため、URL共有時は段階的に短縮する
+  function buildShareText(level: 'full' | 'noDetail' | 'summary' = 'full') {
     const result = displayScore > game.opponent_score ? '勝利🎉' : displayScore < game.opponent_score ? '敗北' : '引き分け'
     // OT（延長）も含めて全ピリオドのスコアを出す
     const maxQ = Math.max(4, ...scoreEvents.map(e => e.quarter))
@@ -1626,16 +1628,14 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 
       const head = `#${player.number || '—'} ${player.name}　${pts}得点`
       const detail = [shoot.join(' '), other.join(' ')].filter(Boolean).join(' / ')
-      return detail ? [head, `　${detail}`] : [head]
+      return level === 'full' && detail ? [head, `　${detail}`] : [head]
     })
 
     const lines = [
       `🏀 vs ${game.opponent}  ${result}`,
       `${displayScore} - ${game.opponent_score}`,
       ...(qRows.length ? ['', '【クォータースコア】', ...qRows] : []),
-      '',
-      '【選手スタッツ】',
-      ...playerLines,
+      ...(level !== 'summary' ? ['', '【選手スタッツ】', ...playerLines] : []),
       ...(shareToken ? [
         '',
         '📋 スコアシート・詳しいスタッツはこちら👇',
@@ -1647,8 +1647,27 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
 
   async function shareResult() {
     const text = buildShareText()
-    const encoded = encodeURIComponent(text)
-    window.open(`https://line.me/R/msg/text/?${encoded}`, '_blank')
+
+    // 対応ブラウザ（スマホほぼ全部＋PC Chrome/Safari）はOSの共有シートを使う。
+    // 文字数制限がなくLINE以外にも送れる。キャンセル時の例外は無視。
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try { await navigator.share({ text }) } catch { /* ユーザーキャンセル等 */ }
+      return
+    }
+
+    // フォールバック: LINEの共有URLスキーム（line.me/R/share）。
+    // 旧 R/msg/text は約4,000文字超で HTTP 400 になったが、R/share は8,000文字超でも
+    // 通ることをcurlで確認済み（2026-08-28）。念のため上限を設け、超えたら段階的に短縮する。
+    const LINE_URL_MAX = 6000
+    for (const t of [text, buildShareText('noDetail')]) {
+      const url = `https://line.me/R/share?text=${encodeURIComponent(t)}`
+      if (url.length <= LINE_URL_MAX) {
+        window.open(url, '_blank')
+        return
+      }
+    }
+    // summary は必ず短いのでそのまま開く（詳細は共有リンク先で見られる）
+    window.open(`https://line.me/R/share?text=${encodeURIComponent(buildShareText('summary'))}`, '_blank')
   }
 
   function printScoresheet() {
