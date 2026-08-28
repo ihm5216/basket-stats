@@ -496,16 +496,16 @@ function NewGameForm() {
             )
           })()}
 
-          {/* 選択済みリスト */}
-          {ourPlayers.length > 0 && (
-            <div>
-              <div className="text-xs text-[var(--muted)] mb-2">選択中のメンバー:</div>
-              <PlayerEditor players={ourPlayers} onChange={setOurPlayers} />
+          {/* 選択済みリスト＋手入力追加（相手チームと同じ。0人でも追加フォームは常に出す） */}
+          <div>
+            <div className="text-xs text-[var(--muted)] mb-2">
+              {ourPlayers.length > 0 ? '選択中のメンバー:' : '手入力で追加:'}
             </div>
-          )}
+            <PlayerEditor players={ourPlayers} onChange={setOurPlayers} />
+          </div>
 
           {ourPlayers.length === 0 && (
-            <p className="text-xs text-[var(--muted)] text-center py-2">写真を読み込むか、登録済みメンバーから選んでください</p>
+            <p className="text-xs text-[var(--muted)] text-center py-2">写真読み込み・登録済みメンバー・手入力のどれでも追加できます</p>
           )}
 
           <div className="flex gap-3 mt-2">
