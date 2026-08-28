@@ -1527,6 +1527,8 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   onRenameOppPlayer?: (oppKey: string, newName: string, newNumber: string) => void
 }) {
   const [tab, setTab] = useState<'stats' | 'scoresheet'>('stats')
+  // 「共有」ボタンのクリップボードコピー完了表示
+  const [shareCopied, setShareCopied] = useState(false)
   // LINE共有用の共有トークン＋チーム種別（一般/ミニバス）を取得
   const [shareToken, setShareToken] = useState('')
   const [category, setCategory] = useState<TeamCategory>('general')
@@ -1646,20 +1648,12 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   }
 
   async function shareResult() {
-    const text = buildShareText()
-
-    // 対応ブラウザ（スマホほぼ全部＋PC Chrome/Safari）はOSの共有シートを使う。
-    // 文字数制限がなくLINE以外にも送れる。キャンセル時の例外は無視。
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try { await navigator.share({ text }) } catch { /* ユーザーキャンセル等 */ }
-      return
-    }
-
-    // フォールバック: LINEの共有URLスキーム（line.me/R/share）。
-    // 旧 R/msg/text は約4,000文字超で HTTP 400 になったが、R/share は8,000文字超でも
-    // 通ることをcurlで確認済み（2026-08-28）。念のため上限を設け、超えたら段階的に短縮する。
+    // 「LINE共有」ボタンはOSの共有シートを挟まずLINEへ直行する。
+    // スキームは line.me/R/share（旧 R/msg/text は約4,000文字超で HTTP 400。
+    // R/share は8,000文字超でも通ることをcurlで確認済み・2026-08-28）。
+    // 念のため上限を設け、超えたら選手の内訳→選手行の順で段階的に短縮する。
     const LINE_URL_MAX = 6000
-    for (const t of [text, buildShareText('noDetail')]) {
+    for (const t of [buildShareText(), buildShareText('noDetail')]) {
       const url = `https://line.me/R/share?text=${encodeURIComponent(t)}`
       if (url.length <= LINE_URL_MAX) {
         window.open(url, '_blank')
@@ -1668,6 +1662,21 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
     }
     // summary は必ず短いのでそのまま開く（詳細は共有リンク先で見られる）
     window.open(`https://line.me/R/share?text=${encodeURIComponent(buildShareText('summary'))}`, '_blank')
+  }
+
+  // 「共有」ボタン: OSの共有シート（メール・メッセージ・メモ等）。
+  // 非対応ブラウザではテキストをコピーして「コピー済」を表示する。
+  async function shareOther() {
+    const text = buildShareText()
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try { await navigator.share({ text }) } catch { /* ユーザーキャンセル等 */ }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    } catch { /* ignore */ }
   }
 
   function printScoresheet() {
@@ -1686,6 +1695,12 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
               className="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted)] text-sm font-bold px-3 py-1.5 rounded-lg active:opacity-80"
             >
               🖨 印刷
+            </button>
+            <button
+              onClick={shareOther}
+              className="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--card-border)] text-[var(--muted)] text-sm font-bold px-3 py-1.5 rounded-lg active:opacity-80"
+            >
+              {shareCopied ? '✓ コピー済' : '↗ 共有'}
             </button>
             <button
               onClick={shareResult}
