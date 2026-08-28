@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Game, Player, PlayerStat } from '@/types'
-import { calcPoints } from '@/lib/stats'
+import { calcPoints, hasOppStatRecord, normalizeOppStat, oppTotalFouls, readOppStatsJson } from '@/lib/stats'
 import JBAOfficialSheet from '@/app/games/[id]/JBAOfficialSheet'
 
 type OppPlayerJson = { number: string; name: string }
@@ -37,6 +37,19 @@ export default function GameShareView({ token, teamName, game, players, stats }:
   const rows = players
     .filter(p => statsMap.has(p.id))
     .map(p => ({ player: p, stat: statsMap.get(p.id)! }))
+
+  // 相手チームのスタッツ。記録した人だけが付ける任意項目なので、
+  // 何も記録が無い試合ではこの表自体を出さない（得点だけの試合は得点のみ並ぶ）。
+  const oppStatsRaw = readOppStatsJson(game.court_data_json)
+  const oppRows = oppPlayerList
+    .map(p => ({
+      player: p,
+      stat: normalizeOppStat(oppStatsRaw?.[p.key]),
+      pts: scoreEvents
+        .filter(e => e.team === 'opponent' && e.opp_player_name === `#${p.number} ${p.name}`)
+        .reduce((s, e) => s + e.points, 0),
+    }))
+    .filter(r => r.pts > 0 || hasOppStatRecord(r.stat))
 
   return (
     <main className="min-h-screen">
@@ -128,6 +141,49 @@ export default function GameShareView({ token, teamName, game, players, stats }:
                       <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.steals}</td>
                       <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.blocks}</td>
                       <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{(stat.fouls_plain ?? 0) + (stat.fouls_1ft ?? 0) + (stat.fouls_2ft ?? 0) + (stat.fouls_3ft ?? 0) + (stat.technical_fouls ?? 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* 相手チームのスタッツ（記録があるときだけ） */}
+        {oppRows.length > 0 && (
+          <section className="mt-6 print:hidden">
+            <h2 className="text-sm font-semibold text-white mb-2">{game.opponent} 選手スタッツ</h2>
+            <div className="overflow-x-auto card p-0">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="text-[10px] border-b border-[var(--card-border)] uppercase" style={{ color: 'var(--muted)' }}>
+                    <th className="text-left py-2 pl-3 pr-3 w-8">#</th>
+                    <th className="text-left py-2 pr-3">名前</th>
+                    <th className="text-right py-2 pr-3 text-brand-400">得点</th>
+                    <th className="text-right py-2 pr-3">2P</th>
+                    <th className="text-right py-2 pr-3">3P</th>
+                    <th className="text-right py-2 pr-3">FT</th>
+                    <th className="text-right py-2 pr-3">REB</th>
+                    <th className="text-right py-2 pr-3">AST</th>
+                    <th className="text-right py-2 pr-3">STL</th>
+                    <th className="text-right py-2 pr-3">BLK</th>
+                    <th className="text-right py-2 pr-3">F</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oppRows.map(({ player, stat, pts }) => (
+                    <tr key={player.key} className="border-b border-[var(--card-border)]">
+                      <td className="py-2.5 pl-3 pr-3 text-brand-300 font-bold text-xs">{player.number || '—'}</td>
+                      <td className="py-2.5 pr-3 text-white font-medium whitespace-nowrap">{player.name}</td>
+                      <td className="py-2.5 pr-3 text-right font-bold text-brand-300">{pts}</td>
+                      <td className="py-2.5 pr-3 text-right text-xs" style={{ color: 'var(--muted)' }}>{stat.fg2_made}/{stat.fg2_attempt}</td>
+                      <td className="py-2.5 pr-3 text-right text-xs" style={{ color: 'var(--muted)' }}>{stat.fg3_made}/{stat.fg3_attempt}</td>
+                      <td className="py-2.5 pr-3 text-right text-xs" style={{ color: 'var(--muted)' }}>{stat.ft_made}/{stat.ft_attempt}</td>
+                      <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.rebounds}</td>
+                      <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.assists}</td>
+                      <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.steals}</td>
+                      <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{stat.blocks}</td>
+                      <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--muted)' }}>{oppTotalFouls(stat)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,4 +1,4 @@
-import { PlayerStat, SeasonStats } from '@/types'
+import { OppStatData, PlayerStat, SeasonStats } from '@/types'
 
 export function calcPoints(stat: PlayerStat): number {
   return stat.fg2_made * 2 + stat.fg3_made * 3 + stat.ft_made
@@ -117,4 +117,55 @@ export function exportToCSV(seasonStats: SeasonStats[], teamName: string): void 
   link.download = `${teamName}_シーズンスタッツ.csv`
   link.click()
   URL.revokeObjectURL(url)
+}
+
+// ─── 相手チームのスタッツ ─────────────────────────────────────────────────────
+// 相手選手は players テーブルに無いため、スタッツは games.court_data_json の
+// scoresheetOv.oppPlayers に「相手選手キー → OppStatData」として持つ。
+// 記録は任意で、押していない項目は 0 のまま集計される。
+
+export const OPP_BOX_KEYS = [
+  'fg2_made', 'fg2_attempt', 'fg3_made', 'fg3_attempt', 'ft_made', 'ft_attempt',
+  'rebounds', 'assists', 'steals', 'blocks', 'turnovers',
+] as const
+export type OppBoxKey = typeof OPP_BOX_KEYS[number]
+
+export const OPP_FOUL_KEYS = [
+  'fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls', 'fouls_unsportsmanlike',
+] as const
+export type OppFoulKey = typeof OPP_FOUL_KEYS[number]
+
+export function emptyOppStat(): OppStatData {
+  return {
+    fg2_made: 0, fg2_attempt: 0, fg3_made: 0, fg3_attempt: 0, ft_made: 0, ft_attempt: 0,
+    rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0,
+    fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, fouls_unsportsmanlike: 0,
+  }
+}
+
+/** 保存済みの部分データ（ファウルだけの旧試合など）を欠損なしの OppStatData に整える */
+export function normalizeOppStat(v?: (Partial<OppStatData> & { fouls?: number }) | null): OppStatData {
+  const out = emptyOppStat()
+  if (!v) return out
+  for (const k of [...OPP_BOX_KEYS, ...OPP_FOUL_KEYS]) {
+    const n = v[k]
+    if (typeof n === 'number' && Number.isFinite(n)) out[k] = Math.max(0, n)
+  }
+  if (v.fouls_plain === undefined && typeof v.fouls === 'number') out.fouls_plain = Math.max(0, v.fouls) // 旧データ互換
+  return out
+}
+
+export function oppTotalFouls(s: OppStatData): number {
+  return OPP_FOUL_KEYS.reduce((n, k) => n + (s[k] ?? 0), 0)
+}
+
+/** 何か1つでも記録されているか（全部0の選手は集計表に出さない） */
+export function hasOppStatRecord(s: OppStatData): boolean {
+  return OPP_BOX_KEYS.some(k => (s[k] ?? 0) > 0) || oppTotalFouls(s) > 0
+}
+
+/** games.court_data_json から相手スタッツの生データを取り出す（未記録なら null） */
+export function readOppStatsJson(courtDataJson: unknown): Record<string, Partial<OppStatData> & { fouls?: number }> | null {
+  const cd = courtDataJson as { scoresheetOv?: { oppPlayers?: Record<string, Partial<OppStatData> & { fouls?: number }> } } | null
+  return cd?.scoresheetOv?.oppPlayers ?? null
 }

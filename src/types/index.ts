@@ -81,6 +81,32 @@ export type PlayerStatWithPlayer = PlayerStat & {
   player: Player
 }
 
+/**
+ * 相手選手の1試合スタッツ。自チームの PlayerStat と同じ項目を持つ。
+ * 相手選手は players テーブルに存在しないため、行ではなく
+ * games.court_data_json（scoresheetOv.oppPlayers）に相手選手キーごとに保存する。
+ * 記録は任意で、押していない項目は 0 のまま。
+ */
+export type OppStatData = {
+  fg2_made: number
+  fg2_attempt: number
+  fg3_made: number
+  fg3_attempt: number
+  ft_made: number
+  ft_attempt: number
+  rebounds: number
+  assists: number
+  steals: number
+  blocks: number
+  turnovers: number
+  fouls_plain: number
+  fouls_1ft: number
+  fouls_2ft: number
+  fouls_3ft: number
+  technical_fouls: number
+  fouls_unsportsmanlike: number
+}
+
 export type SeasonStats = {
   player_id: string
   player_name: string

@@ -5,15 +5,17 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { hasFreeAccess, getFinishedGamesCount, FREE_GAMES_LIMIT } from '@/lib/freeAccess'
-import { Game, Player, PlayerStat, TeamCategory } from '@/types'
-import { calcPoints } from '@/lib/stats'
+import { Game, OppStatData, Player, PlayerStat, TeamCategory } from '@/types'
+import { calcPoints, emptyOppStat, hasOppStatRecord, normalizeOppStat, oppTotalFouls, readOppStatsJson, type OppBoxKey } from '@/lib/stats'
 import JBAOfficialSheet from './JBAOfficialSheet'
 
 type StatKey = keyof Omit<PlayerStat, 'id' | 'game_id' | 'player_id'>
 type PendingChange = { playerId: string; key: StatKey; delta: number; gid: number }
 type OppPlayer = { key: string; number: string; name: string }
 type OppFoulData = { fouls_plain: number; fouls_1ft: number; fouls_2ft: number; fouls_3ft: number; technical_fouls: number; fouls_unsportsmanlike: number }
-function emptyOppFoul(): OppFoulData { return { fouls_plain: 0, fouls_1ft: 0, fouls_2ft: 0, fouls_3ft: 0, technical_fouls: 0, fouls_unsportsmanlike: 0 } }
+// 相手選手のスタッツ（OppStatData）は自チームと同じ項目を持つが、押した分だけ記録される。
+// 何も押さなければ全て0のまま＝「得点だけ記録する」運用でもそのまま成立する。
+// 型と集計ヘルパーは共有リンク画面でも使うため @/types と @/lib/stats に置いてある。
 type ScoreEvent = {
   gid?: number
   quarter: number
@@ -684,11 +686,11 @@ function foulLabel(t: keyof OppFoulData): string {
   return t === 'technical_fouls' ? 'T' : t === 'fouls_unsportsmanlike' ? 'U' : t === 'fouls_1ft' ? 'P1' : t === 'fouls_2ft' ? 'P2' : t === 'fouls_3ft' ? 'P3' : 'P'
 }
 
-function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppFoulsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter, category = 'general' }: {
+function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId, qConfirmPending, onConfirmAdvance, oppStatsMap, onDeleteEvent, onAddEvent, onChangeEventPlayer, onFoulEdit, onRenamePlayer, onRenameOppPlayer, homeTimeoutRecords, oppTimeoutRecords, foulEvents, currentQuarter, category = 'general' }: {
   game: Game; players: Player[]; statsMap: Map<string, PlayerStat>
   scoreEvents: ScoreEvent[]; oppPlayerList: OppPlayer[]; gameId: string
   qConfirmPending?: number | null; onConfirmAdvance?: () => void
-  oppFoulsMap?: Record<string, OppFoulData>
+  oppStatsMap?: Record<string, OppFoulData>
   onDeleteEvent?: (idx: number, ev: ScoreEvent) => void
   onAddEvent?: (req: AddEventRequest) => void
   onChangeEventPlayer?: (idx: number, ev: ScoreEvent, newId: string) => void
@@ -1145,8 +1147,8 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             starters={qOppStarters}
             subs={qOppSubs}
             getStats={pid => {
-              // oppFoulsMap prop優先、なければ localStorage の scoresheet_ov から取得
-              const foulEntry = oppFoulsMap?.[pid]
+              // oppStatsMap prop優先、なければ localStorage の scoresheet_ov から取得
+              const foulEntry = oppStatsMap?.[pid]
               if (foulEntry !== undefined) {
                 const total = foulEntry.fouls_plain + foulEntry.fouls_1ft + foulEntry.fouls_2ft + foulEntry.fouls_3ft + foulEntry.technical_fouls + foulEntry.fouls_unsportsmanlike
                 if (!total) return undefined
@@ -1563,6 +1565,27 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
       stat: statsMap.get(p.id)!,
     }))
 
+  // 相手チームのスタッツ（court_data_json優先・localStorageフォールバック）。
+  // 記録していない項目は0のまま。何も付けていない試合ではこの表自体を出さない。
+  const oppRows = (() => {
+    let raw: Record<string, Partial<OppStatData> & { fouls?: number }> | null = null
+    try { raw = readOppStatsJson(game.court_data_json) } catch { /* ignore */ }
+    if (!raw) {
+      try {
+        const s = localStorage.getItem(`scoresheet_ov_${game.id}`)
+        if (s) raw = JSON.parse(s).oppPlayers ?? null
+      } catch { /* ignore */ }
+    }
+    return oppPlayerList
+      .map(p => ({
+        player: p,
+        stat: normalizeOppStat(raw?.[p.key]),
+        pts: getOppPlayerScore(scoreEvents, `#${p.number} ${p.name}`),
+      }))
+      .filter(r => r.pts > 0 || hasOppStatRecord(r.stat))
+  })()
+  const oppTotalPoints = oppRows.reduce((s, r) => s + r.pts, 0)
+
   // 個人スタッツの合計得点
   const totalPoints = rows.reduce((sum, { stat }) => sum + calcPoints(stat), 0)
   // scoreEventsの合計（より正確なランニングスコアの合計）
@@ -1741,6 +1764,66 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
                 </tbody>
               </table>
             </div>
+
+            {/* 相手チームのスタッツ。記録した項目だけが並ぶ（付けていなければ0） */}
+            {oppRows.length > 0 && (
+              <>
+                <div className="text-xs text-[var(--muted)] mb-3 mt-8 px-2 uppercase tracking-wide">{game.opponent} 選手スタッツ</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[580px]">
+                    <thead>
+                      <tr className="text-[10px] text-[var(--muted)] border-b border-[var(--card-border)] uppercase">
+                        <th className="text-left py-2 pl-2 pr-3 w-8">#</th>
+                        <th className="text-left py-2 pr-3">名前</th>
+                        <th className="text-right py-2 pr-3 text-brand-400">得点</th>
+                        <th className="text-right py-2 pr-3">2P</th>
+                        <th className="text-right py-2 pr-3">3P</th>
+                        <th className="text-right py-2 pr-3">FT</th>
+                        <th className="text-right py-2 pr-3">REB</th>
+                        <th className="text-right py-2 pr-3">AST</th>
+                        <th className="text-right py-2 pr-3">STL</th>
+                        <th className="text-right py-2 pr-3">BLK</th>
+                        <th className="text-right py-2 pr-3">TO</th>
+                        <th className="text-right py-2 pr-2">F</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {oppRows.map(({ player, stat, pts }) => (
+                        <tr key={player.key} className="border-b border-[var(--card-border)] hover:bg-white/5">
+                          <td className="py-3 pl-2 pr-3 text-brand-300 font-bold text-xs whitespace-nowrap">{player.number || '—'}</td>
+                          <td className="py-3 pr-3 text-white font-medium whitespace-nowrap">{player.name}</td>
+                          <td className="py-3 pr-3 text-right font-bold text-brand-300">{pts}</td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)] text-xs whitespace-nowrap">
+                            {stat.fg2_made}/{stat.fg2_attempt}
+                            <span className="text-[9px] ml-0.5">({pct(stat.fg2_made, stat.fg2_attempt)})</span>
+                          </td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)] text-xs whitespace-nowrap">
+                            {stat.fg3_made}/{stat.fg3_attempt}
+                            <span className="text-[9px] ml-0.5">({pct(stat.fg3_made, stat.fg3_attempt)})</span>
+                          </td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)] text-xs whitespace-nowrap">
+                            {stat.ft_made}/{stat.ft_attempt}
+                            <span className="text-[9px] ml-0.5">({pct(stat.ft_made, stat.ft_attempt)})</span>
+                          </td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)]">{stat.rebounds}</td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)]">{stat.assists}</td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)]">{stat.steals}</td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)]">{stat.blocks}</td>
+                          <td className="py-3 pr-3 text-right text-[var(--muted)]">{stat.turnovers}</td>
+                          <td className="py-3 pr-2 text-right text-[var(--muted)]">{oppTotalFouls(stat)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-brand-500/40 bg-white/5 font-bold">
+                        <td className="py-3 pl-2 pr-3 text-[var(--muted)] text-xs">—</td>
+                        <td className="py-3 pr-3 text-white text-sm">合計</td>
+                        <td className="py-3 pr-3 text-right text-brand-300 text-base">{oppTotalPoints}</td>
+                        <td colSpan={9} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -1981,7 +2064,15 @@ export default function GamePage() {
   const [foulDialog, setFoulDialog] = useState<{ isOpen: boolean; playerId?: string }>({ isOpen: false })
   const [foulOppDialog, setFoulOppDialog] = useState<{ isOpen: boolean; playerKey?: string; playerName?: string }>({ isOpen: false })
   const [oppTeamFouls, setOppTeamFouls] = useState(0)
-  const [oppFoulsMap, setOppFoulsMap] = useState<Record<string, OppFoulData>>({})
+  const [oppStatsMap, setOppStatsMap] = useState<Record<string, OppStatData>>({})
+  // 相手スタッツの取り消し履歴（自チームの undoStack と同じ時系列で「戻す」を効かせる）
+  const [oppUndoStack, setOppUndoStack] = useState<{
+    gid: number
+    playerKey: string
+    deltas: Partial<Record<keyof OppStatData, number>>
+    points?: number                     // 得点を伴う操作なら点数（同じgidのスコアイベントも一緒に戻す）
+    foulType?: keyof OppFoulData        // ファウルならその種類（チームファウル数とファウルイベントも戻す）
+  }[]>([])
   // 5ファウルアウト通知
   const [foulOutAlert, setFoulOutAlert] = useState<{ playerName: string; playerNumber: string } | null>(null)
   // 試合終了の確認モーダル（window.confirmはLINE内ブラウザ等で表示されないことがあるため自前で出す）
@@ -2332,25 +2423,18 @@ export default function GamePage() {
       } catch { /* ignore */ }
     }
 
-    // 相手ファウルマップを復元
+    // 相手スタッツ（ファウル＋FG/リバウンド等）を復元。
+    // ファウルしか無い過去の試合でも normalizeOppStat が不足分を0で埋めるので落ちない。
     try {
       const ovRaw = localStorage.getItem(`scoresheet_ov_${id}`)
       const ov = ovRaw ? JSON.parse(ovRaw) : null
       if (ov?.oppPlayers) {
-        const fm: Record<string, OppFoulData> = {}
-        for (const [k, v] of Object.entries(ov.oppPlayers as Record<string, { fouls?: number; fouls_plain?: number; fouls_1ft?: number; fouls_2ft?: number; fouls_3ft?: number; technical_fouls?: number; fouls_unsportsmanlike?: number }>)) {
-          const entry: OppFoulData = {
-            fouls_plain: v.fouls_plain ?? v.fouls ?? 0, // 旧データとの後方互換
-            fouls_1ft: v.fouls_1ft ?? 0,
-            fouls_2ft: v.fouls_2ft ?? 0,
-            fouls_3ft: v.fouls_3ft ?? 0,
-            technical_fouls: v.technical_fouls ?? 0,
-            fouls_unsportsmanlike: v.fouls_unsportsmanlike ?? 0,
-          }
-          const total = entry.fouls_plain + entry.fouls_1ft + entry.fouls_2ft + entry.fouls_3ft + entry.technical_fouls + entry.fouls_unsportsmanlike
-          if (total > 0) fm[k] = entry
+        const fm: Record<string, OppStatData> = {}
+        for (const [k, v] of Object.entries(ov.oppPlayers as Record<string, Partial<OppStatData> & { fouls?: number }>)) {
+          const entry = normalizeOppStat(v)
+          if (hasOppStatRecord(entry)) fm[k] = entry
         }
-        if (Object.keys(fm).length > 0) setOppFoulsMap(fm)
+        if (Object.keys(fm).length > 0) setOppStatsMap(fm)
       }
     } catch { /* ignore */ }
 
@@ -2376,8 +2460,74 @@ export default function GamePage() {
 
   // 相手選手の退場（失格含む）判定。自チームと同じ JBA/FIBA ルール（5ファウル/T2/U2/T1+U1）を適用。
   function isOppDisqualified(oppKey: string): boolean {
-    const f = oppFoulsMap[oppKey]
+    const f = oppStatsMap[oppKey]
     return f ? isDisqualified(f as unknown as PlayerStat) : false
+  }
+
+  function getOppStat(oppKey: string): OppStatData {
+    return oppStatsMap[oppKey] ?? emptyOppStat()
+  }
+
+  /**
+   * 相手選手のスタッツを増減し、localStorage(scoresheet_ov) にも書き戻す。
+   * scoresheet_ov は court_data_json に載って Supabase へ同期されるので、
+   * ここに書くだけで永続化とクロスデバイス復元が両方効く。
+   */
+  function applyOppStatDeltas(playerKey: string, deltas: Partial<Record<keyof OppStatData, number>>) {
+    setOppStatsMap(prev => {
+      const updated = { ...(prev[playerKey] ?? emptyOppStat()) }
+      for (const [k, d] of Object.entries(deltas)) {
+        const key = k as keyof OppStatData
+        updated[key] = Math.max(0, (updated[key] ?? 0) + (d ?? 0))
+      }
+      const next = { ...prev, [playerKey]: updated }
+      try {
+        const raw = localStorage.getItem(`scoresheet_ov_${id}`)
+        const ov = raw ? JSON.parse(raw) : {}
+        ov.oppPlayers = { ...(ov.oppPlayers ?? {}), [playerKey]: updated }
+        localStorage.setItem(`scoresheet_ov_${id}`, JSON.stringify(ov))
+      } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  /**
+   * 相手選手のスタッツ記録。自チームの handleStatTap と同じボタン構成で動く。
+   * 押した項目だけが加算されるので、得点しか押さない使い方でも記録は成立する。
+   */
+  function recordOppStatTap(btn: typeof STAT_BUTTONS[0]) {
+    if (!selectedOppPlayer) return
+    const opp = selectedOppPlayer
+    const oppName = `#${opp.number} ${opp.name}`
+
+    // ファウルは種類（P/P1/P2/P3/T/U）を選ぶダイアログへ
+    if (['fouls_plain', 'fouls_1ft', 'fouls_2ft', 'fouls_3ft', 'technical_fouls'].includes(btn.key)) {
+      setFoulOppDialog({ isOpen: true, playerKey: opp.key, playerName: oppName })
+      return
+    }
+    // 退場選手は2P/3P成功のみブロック（FTは退場直後でも打てる）
+    if ((btn.key === 'fg2_made' || btn.key === 'fg3_made') && isOppDisqualified(opp.key)) {
+      setSelectedOppPlayer(null)
+      return
+    }
+
+    const key = btn.key as OppBoxKey
+    const deltas: Partial<Record<keyof OppStatData, number>> = { [key]: 1 }
+    if (key === 'fg2_made') deltas.fg2_attempt = 1
+    if (key === 'fg3_made') deltas.fg3_attempt = 1
+    if (key === 'ft_made') deltas.ft_attempt = 1
+
+    const pts = key === 'fg2_made' ? 2 : key === 'fg3_made' ? 3 : key === 'ft_made' ? 1 : 0
+    applyOppStatDeltas(opp.key, deltas)
+
+    if (pts > 0) {
+      // 得点はランニングスコア（scoreEvents）が正。gidを共有して「戻す」で一括取り消しできるようにする
+      const gid = updateOpponentScore(pts, oppName)
+      setOppUndoStack(prev => [...prev, { gid, playerKey: opp.key, deltas, points: pts }].slice(-30))
+    } else {
+      setOppUndoStack(prev => [...prev, { gid: ++gidRef.current, playerKey: opp.key, deltas }].slice(-30))
+      setSelectedOppPlayer(null)  // 記録後に自動デセレクト（自チームと同じ挙動）
+    }
   }
 
   function recordFoulWithFT(playerId: string, ftCount: number) {
@@ -2448,6 +2598,25 @@ export default function GamePage() {
     const lastUndoGid = undoStack.length > 0 ? (undoStack[undoStack.length - 1][0]?.gid ?? -1) : -1
     const mostRecentHomeGid = Math.max(lastPendingGid, lastUndoGid)
 
+    // 相手スタッツの操作が一番新しければ、それを戻す。
+    // 得点を伴う操作は同じgidのスコアイベントも、ファウルはチームファウルも一緒に戻す。
+    const lastOpp = oppUndoStack[oppUndoStack.length - 1]
+    if (lastOpp && lastOpp.gid > mostRecentHomeGid) {
+      const reversed: Partial<Record<keyof OppStatData, number>> = {}
+      for (const [k, d] of Object.entries(lastOpp.deltas)) reversed[k as keyof OppStatData] = -(d ?? 0)
+      applyOppStatDeltas(lastOpp.playerKey, reversed)
+      setOppUndoStack(prev => prev.slice(0, -1))
+      if (lastOpp.foulType) {
+        setOppTeamFouls(t => Math.max(0, t - 1))
+        removeLastFoulEvent('opponent', lastOpp.playerKey, lastOpp.foulType)
+      }
+      if (lastOpp.points && lastScoreEvent?.team === 'opponent' && lastEvtGid === lastOpp.gid) {
+        setGame(g => g ? { ...g, opponent_score: Math.max(0, g.opponent_score - lastOpp.points!) } : g)
+        setScoreEvents(prev => prev.slice(0, -1))
+      }
+      return
+    }
+
     if (lastScoreEvent?.team === 'opponent' && lastEvtGid > mostRecentHomeGid) {
       setGame(g => g ? { ...g, opponent_score: Math.max(0, g.opponent_score - lastScoreEvent.points) } : g)
       setScoreEvents(prev => prev.slice(0, -1))
@@ -2513,6 +2682,13 @@ export default function GamePage() {
       }
     } else {
       setGame(g => g ? { ...g, opponent_score: Math.max(0, g.opponent_score - ev.points) } : g)
+      // 相手スタッツにも成功数を記録している場合は一緒に取り消す（記録していなければ0のまま何も起きない）
+      const oppKey = oppPlayerList.find(p => `#${p.number} ${p.name}` === ev.opp_player_name)?.key
+      if (oppKey) {
+        const key: OppBoxKey = ev.points === 1 ? 'ft_made' : ev.points === 2 ? 'fg2_made' : 'fg3_made'
+        const attemptKey: OppBoxKey = ev.points === 1 ? 'ft_attempt' : ev.points === 2 ? 'fg2_attempt' : 'fg3_attempt'
+        applyOppStatDeltas(oppKey, { [key]: -1, [attemptKey]: -1 })
+      }
     }
   }
 
@@ -2550,12 +2726,13 @@ export default function GamePage() {
     // ランニングスコアの相手表示は opp_player_name の #番号 を参照するため更新
     setScoreEvents(prev => prev.map(e => e.team === 'opponent' && e.opp_player_name === oldDisplay ? { ...e, opp_player_name: newDisplay } : e))
     setFoulEvents(prev => prev.map(e => e.team === 'opponent' && e.key === oldKey ? { ...e, key: newKey } : e))
-    setOppFoulsMap(prev => {
+    setOppStatsMap(prev => {
       if (!(oldKey in prev)) return prev
-      const next: Record<string, OppFoulData> = {}
+      const next: Record<string, OppStatData> = {}
       for (const [k, v] of Object.entries(prev)) next[k === oldKey ? newKey : k] = v
       return next
     })
+    setOppUndoStack(prev => prev.map(e => e.playerKey === oldKey ? { ...e, playerKey: newKey } : e))
     // localStorage 群の key を移行
     try {
       const ovRaw = localStorage.getItem(`scoresheet_ov_${id}`)
@@ -2641,6 +2818,13 @@ export default function GamePage() {
       }
     } else {
       setGame(g => g ? { ...g, opponent_score: g.opponent_score + req.points } : g)
+      // 相手スタッツ側にも成功／試投を反映（スコアシートからの追加分）
+      const oppKey = oppPlayerList.find(p => `#${p.number} ${p.name}` === req.opp_player_name)?.key
+      if (oppKey) {
+        const key: OppBoxKey = req.points === 1 ? 'ft_made' : req.points === 2 ? 'fg2_made' : 'fg3_made'
+        const attemptKey: OppBoxKey = req.points === 1 ? 'ft_attempt' : req.points === 2 ? 'fg2_attempt' : 'fg3_attempt'
+        applyOppStatDeltas(oppKey, { [key]: 1, [attemptKey]: 1 })
+      }
     }
   }
 
@@ -2654,11 +2838,11 @@ export default function GamePage() {
       if (delta > 0) pushFoulEvent('us', playerId, foulType)
       else removeLastFoulEvent('us', playerId, foulType)
     } else {
-      // 相手チーム: oppFoulsMapを更新してlocalStorageにも保存
+      // 相手チーム: oppStatsMapを更新してlocalStorageにも保存
       // 退場検出（加算後に5ファウル/T2/U2 等へ到達したらアラート）
       if (delta > 0) {
-        const currentFouls = oppFoulsMap[playerId] ?? emptyOppFoul()
-        const projected: OppFoulData = { ...currentFouls, [foulType]: currentFouls[foulType] + 1 }
+        const currentFouls = getOppStat(playerId)
+        const projected: OppStatData = { ...currentFouls, [foulType]: currentFouls[foulType] + 1 }
         if (isDisqualified(projected as unknown as PlayerStat) && !isDisqualified(currentFouls as unknown as PlayerStat)) {
           const op = oppPlayerList.find(p => p.key === playerId)
           if (op) setFoulOutAlert({ playerName: op.name, playerNumber: op.number })
@@ -2667,19 +2851,7 @@ export default function GamePage() {
       setOppTeamFouls(prev => Math.max(0, prev + delta))
       if (delta > 0) pushFoulEvent('opponent', playerId, foulType)
       else removeLastFoulEvent('opponent', playerId, foulType)
-      setOppFoulsMap(prev => {
-        const current = prev[playerId] ?? emptyOppFoul()
-        const updated: OppFoulData = { ...current, [foulType]: Math.max(0, current[foulType] + delta) }
-        const next = { ...prev, [playerId]: updated }
-        // scoresheet_ov に永続化
-        try {
-          const raw = localStorage.getItem(`scoresheet_ov_${id}`)
-          const ov = raw ? JSON.parse(raw) : {}
-          ov.oppPlayers = { ...(ov.oppPlayers ?? {}), [playerId]: updated }
-          localStorage.setItem(`scoresheet_ov_${id}`, JSON.stringify(ov))
-        } catch { /* ignore */ }
-        return next
-      })
+      applyOppStatDeltas(playerId, { [foulType]: delta })
     }
   }
 
@@ -2699,28 +2871,16 @@ export default function GamePage() {
       : ftCount === 2 ? 'fouls_2ft'
       : 'fouls_3ft'
     // 退場検出（このファウルを加えた後の状態で判定：5ファウル / テクニカル2 / アンスポ2 等）
-    const currentFouls = oppFoulsMap[playerKey] ?? emptyOppFoul()
-    const projected: OppFoulData = { ...currentFouls, [field]: currentFouls[field] + 1 }
+    const currentFouls = getOppStat(playerKey)
+    const projected: OppStatData = { ...currentFouls, [field]: currentFouls[field] + 1 }
     if (isDisqualified(projected as unknown as PlayerStat)) {
       const op = oppPlayerList.find(p => p.key === playerKey)
       if (op) setFoulOutAlert({ playerName: op.name, playerNumber: op.number })
     }
     setOppTeamFouls(prev => prev + 1)
     pushFoulEvent('opponent', playerKey, field)
-    setOppFoulsMap(prev => {
-      const current = prev[playerKey] ?? emptyOppFoul()
-      const updated: OppFoulData = { ...current, [field]: current[field] + 1 }
-      const next = { ...prev, [playerKey]: updated }
-      // localStorageにも永続化
-      try {
-        const storageKey = `scoresheet_ov_${id}`
-        const s = localStorage.getItem(storageKey)
-        const ov = s ? JSON.parse(s) : { quarterScores: {}, homePlayers: {}, oppPlayers: {} }
-        ov.oppPlayers[playerKey] = { ...(ov.oppPlayers[playerKey] ?? {}), ...updated }
-        localStorage.setItem(storageKey, JSON.stringify(ov))
-      } catch { /* ignore */ }
-      return next
-    })
+    applyOppStatDeltas(playerKey, { [field]: 1 })
+    setOppUndoStack(prev => [...prev, { gid: ++gidRef.current, playerKey, deltas: { [field]: 1 }, foulType: field }].slice(-30))
     setFoulOppDialog({ isOpen: false })
     setSelectedOppPlayer(null)
   }
@@ -2830,9 +2990,11 @@ export default function GamePage() {
     // us side: handled via handleScoresheetPtsEdit per player (or direct game score edit)
   }
 
-  function updateOpponentScore(delta: number, playerName?: string) {
+  // 相手の得点を増減する。加点時は採番した gid を返し、呼び出し側が
+  // 相手スタッツの取り消し履歴と紐付けられるようにする（減点時は -1）。
+  function updateOpponentScore(delta: number, playerName?: string): number {
+    const gid = delta > 0 ? ++gidRef.current : -1
     if (delta > 0) {
-      const gid = ++gidRef.current
       setScoreEvents(prev => {
         const last = prev[prev.length - 1]
         // gameRefはrender後に更新 → 直前イベントの値を使う（stale回避）
@@ -2854,7 +3016,56 @@ export default function GamePage() {
     }
     setGame(prev => prev ? { ...prev, opponent_score: Math.max(0, prev.opponent_score + delta) } : prev)
     setSelectedOppPlayer(null)
+    return gid
   }
+
+  /**
+   * games.court_data_json に入れる1まとめのJSONを組み立てる。
+   * Q別の出場/交代・スコアシート修正（相手スタッツもここに入る）・ファウルイベント・タイムアウトを含む。
+   * 自動保存・試合終了・相手スタッツ同期の3か所で共用する。
+   */
+  const buildCourtData = useCallback(() => {
+    const homeStarters: Record<string, string[]> = {}
+    const oppStarters: Record<string, string[]> = {}
+    const homeSubs: Record<string, string[]> = {}
+    const oppSubs: Record<string, string[]> = {}
+    for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
+      try {
+        const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
+        const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
+        const hsub = localStorage.getItem(`sub_q${q}_${id}`); if (hsub) homeSubs[q] = JSON.parse(hsub)
+        const osub = localStorage.getItem(`sub_opp_q${q}_${id}`); if (osub) oppSubs[q] = JSON.parse(osub)
+      } catch { /* ignore */ }
+    }
+    let scoresheetOv: unknown = null
+    try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
+    let foulEvs: unknown = null
+    try { const fe = localStorage.getItem(`foul_events_${id}`); if (fe) foulEvs = JSON.parse(fe) } catch { /* ignore */ }
+    return {
+      homeStarters, oppStarters, homeSubs, oppSubs,
+      ...(scoresheetOv ? { scoresheetOv } : {}),
+      ...(foulEvs ? { foulEvents: foulEvs } : {}),
+      // タイムアウト記録も忘れずに含める（以前はここで欠落し、試合終了後に消えていた）
+      homeTimeouts: homeTimeoutRecords,
+      oppTimeouts: oppTimeoutRecords,
+    }
+  }, [id, homeTimeoutRecords, oppTimeoutRecords])
+
+  // 相手スタッツだけを記録している間は自チームのpendingが動かず saveStats が走らないため、
+  // 単独で court_data_json を遅延同期する（クロスデバイス・リロード対策）。
+  const oppSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (loading || Object.keys(oppStatsMap).length === 0) return
+    if (oppSyncTimer.current) clearTimeout(oppSyncTimer.current)
+    oppSyncTimer.current = setTimeout(async () => {
+      const g = gameRef.current
+      if (!g || g.is_finished) return
+      try {
+        await createClient().from('games').update({ court_data_json: buildCourtData() }).eq('id', id)
+      } catch { /* オフライン時も localStorage には保存済み */ }
+    }, 3000)
+    return () => { if (oppSyncTimer.current) clearTimeout(oppSyncTimer.current) }
+  }, [oppStatsMap, loading, id, buildCourtData])
 
   const saveStats = useCallback(async () => {
     // 保存処理を直列化（同時並行でDBに重複INSERTされるのを防ぐ）
@@ -2916,31 +3127,7 @@ export default function GamePage() {
     if (gameRef.current) {
       // score_events_json + court_data_json を同時保存してクロスデバイス同期
       const currentEvents = scoreEventsRef.current
-      const courtData = (() => {
-        const homeStarters: Record<string, string[]> = {}
-        const oppStarters: Record<string, string[]> = {}
-        const homeSubs: Record<string, string[]> = {}
-        const oppSubs: Record<string, string[]> = {}
-        for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
-          try {
-            const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
-            const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
-            const hsub = localStorage.getItem(`sub_q${q}_${id}`); if (hsub) homeSubs[q] = JSON.parse(hsub)
-            const osub = localStorage.getItem(`sub_opp_q${q}_${id}`); if (osub) oppSubs[q] = JSON.parse(osub)
-          } catch { /* ignore */ }
-        }
-        let scoresheetOv: unknown = null
-        try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
-        let foulEvs: unknown = null
-        try { const fe = localStorage.getItem(`foul_events_${id}`); if (fe) foulEvs = JSON.parse(fe) } catch { /* ignore */ }
-        return {
-          homeStarters, oppStarters, homeSubs, oppSubs,
-          ...(scoresheetOv ? { scoresheetOv } : {}),
-          ...(foulEvs ? { foulEvents: foulEvs } : {}),
-          homeTimeouts: homeTimeoutRecords,
-          oppTimeouts: oppTimeoutRecords,
-        }
-      })()
+      const courtData = buildCourtData()
       await supabase.from('games')
         .update({
           our_score: Math.max(0, gameRef.current.our_score),
@@ -2962,7 +3149,7 @@ export default function GamePage() {
     }
     // 保存中に新たな変更が来ていたら、もう一度保存する
     if (saveAgainRef.current) { saveAgainRef.current = false; setTimeout(() => saveStatsRef.current(), 50) }
-  }, [pending, statsMap, id])
+  }, [pending, statsMap, id, buildCourtData])
 
   // saveStatsRef を常に最新に同期（タイマーのクロージャずれ対策）
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3078,32 +3265,7 @@ export default function GamePage() {
 
     // 相手選手・スコアイベント・コートデータを games テーブルに永続化（クロスデバイス対応）
     const oppPlayersData = oppPlayerList.map(p => ({ number: p.number, name: p.name }))
-    const courtDataFinal = (() => {
-      const homeStarters: Record<string, string[]> = {}
-      const oppStarters: Record<string, string[]> = {}
-      const homeSubs: Record<string, string[]> = {}
-      const oppSubs: Record<string, string[]> = {}
-      for (let q = 1; q <= 10; q++) {  // OT（延長）も含めて読み書きする
-        try {
-          const hs = localStorage.getItem(`court_q${q}_${id}`); if (hs) homeStarters[q] = JSON.parse(hs)
-          const os = localStorage.getItem(`court_opp_q${q}_${id}`); if (os) oppStarters[q] = JSON.parse(os)
-          const hsub = localStorage.getItem(`sub_q${q}_${id}`); if (hsub) homeSubs[q] = JSON.parse(hsub)
-          const osub = localStorage.getItem(`sub_opp_q${q}_${id}`); if (osub) oppSubs[q] = JSON.parse(osub)
-        } catch { /* ignore */ }
-      }
-      let scoresheetOv: unknown = null
-      try { const ov = localStorage.getItem(`scoresheet_ov_${id}`); if (ov) scoresheetOv = JSON.parse(ov) } catch { /* ignore */ }
-      let foulEvs: unknown = null
-      try { const fe = localStorage.getItem(`foul_events_${id}`); if (fe) foulEvs = JSON.parse(fe) } catch { /* ignore */ }
-      return {
-        homeStarters, oppStarters, homeSubs, oppSubs,
-        ...(scoresheetOv ? { scoresheetOv } : {}),
-        ...(foulEvs ? { foulEvents: foulEvs } : {}),
-        // タイムアウト記録も忘れずに含める（以前はここで欠落し、試合終了後に消えていた）
-        homeTimeouts: homeTimeoutRecords,
-        oppTimeouts: oppTimeoutRecords,
-      }
-    })()
+    const courtDataFinal = buildCourtData()
     await supabase.from('games').update({
       is_finished: true,
       quarter: currentQuarter,
@@ -3381,7 +3543,7 @@ export default function GamePage() {
             gameId={id}
             qConfirmPending={qConfirmPending}
             onConfirmAdvance={confirmQuarterAdvance}
-            oppFoulsMap={oppFoulsMap}
+            oppStatsMap={oppStatsMap}
             onDeleteEvent={handleDeleteScoreEvent}
             onAddEvent={handleAddScoreEvent}
             onChangeEventPlayer={handleChangeEventPlayer}
@@ -3473,7 +3635,7 @@ export default function GamePage() {
                   const isSelected = selectedOppPlayer?.key === player.key
                   const isFouledOut = isOppDisqualified(player.key)
                   const oppScore = getOppPlayerScore(scoreEvents, `#${player.number} ${player.name}`)
-                  const oppFoulData = oppFoulsMap[player.key]
+                  const oppFoulData = oppStatsMap[player.key]
                   const oppFoulCount = oppFoulData ? getTotalFouls(oppFoulData as unknown as PlayerStat) : 0
                   return (
                     <button
@@ -3535,12 +3697,28 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* 相手選手選択中 */}
-          {selectedOppPlayer && (
-            <div className="bg-[var(--card)] border border-brand-500/40 rounded-xl px-3 py-2">
-              <div className="text-sm font-bold text-brand-300">#{selectedOppPlayer.number} {selectedOppPlayer.name}</div>
-            </div>
-          )}
+          {/* 相手選手選択中（自チームと同じ内訳を表示。押していない項目は0のまま） */}
+          {selectedOppPlayer && (() => {
+            const oppStat = getOppStat(selectedOppPlayer.key)
+            return (
+              <div className="bg-[var(--card)] border border-brand-500/40 rounded-xl px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-brand-300">#{selectedOppPlayer.number} {selectedOppPlayer.name}</span>
+                  <span className="text-brand-400 font-bold">{getOppPlayerScore(scoreEvents, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}pts</span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0 text-[10px] text-[var(--muted)] mt-1">
+                  <span>2P {oppStat.fg2_made}/{oppStat.fg2_attempt}</span>
+                  {category !== 'mini' && <span>3P {oppStat.fg3_made}/{oppStat.fg3_attempt}</span>}
+                  <span>FT {oppStat.ft_made}/{oppStat.ft_attempt}</span>
+                  <span>REB {oppStat.rebounds}</span>
+                  <span>AST {oppStat.assists}</span>
+                  <span>STL {oppStat.steals}</span>
+                  <span>BLK {oppStat.blocks}</span>
+                  <span>TO {oppStat.turnovers}</span>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* スタッツ入力 / 相手得点ボタン */}
           {selectedPlayer ? (
@@ -3553,24 +3731,13 @@ export default function GamePage() {
               ))}
             </div>
           ) : selectedOppPlayer ? (
-            <div className="space-y-2">
-              <div className="flex gap-3">
-                {([1, 2, 3] as const).filter(pts => category !== 'mini' || pts !== 3).map(pts => (
-                  <button
-                    key={pts}
-                    onClick={() => updateOpponentScore(pts, `#${selectedOppPlayer.number} ${selectedOppPlayer.name}`)}
-                    className="flex-1 py-4 rounded-xl bg-brand-500/20 border border-brand-500/50 text-brand-300 font-bold text-2xl active:scale-95 transition-all"
-                  >
-                    +{pts}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setFoulOppDialog({ isOpen: true, playerKey: selectedOppPlayer.key, playerName: `#${selectedOppPlayer.number} ${selectedOppPlayer.name}` })}
-                className="w-full py-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-sm active:scale-95 transition-all"
-              >
-                ファウル
-              </button>
+            // 相手も自チームと同じボタン。得点だけ押す使い方でもOK（他は0のまま集計される）
+            <div className="grid grid-cols-3 gap-2">
+              {STAT_BUTTONS.filter(btn => category !== 'mini' || (btn.key !== 'fg3_made' && btn.key !== 'fg3_attempt')).map(btn => (
+                <button key={btn.key + btn.label} onClick={() => recordOppStatTap(btn)} className={`stat-btn ${btn.category}`}>
+                  <span>{btn.label}</span>
+                </button>
+              ))}
             </div>
           ) : !subInPlayer && !subInOppPlayer ? (
             <div className="card text-center py-4">
