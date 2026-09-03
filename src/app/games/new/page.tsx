@@ -308,7 +308,7 @@ function NewGameForm() {
   const steps = ['試合情報', '自チーム選手', '相手チーム選手']
 
   return (
-    <main className="min-h-screen max-w-lg mx-auto px-4 py-8">
+    <main className="min-h-screen max-w-lg mx-auto px-4 pt-[max(2rem,calc(env(safe-area-inset-top)+1rem))] pb-8">
       <Link href={teamId ? `/teams/${teamId}` : '/dashboard'} className="text-[var(--muted)] text-sm hover:text-white mb-6 inline-flex items-center gap-1">
         ← 戻る
       </Link>

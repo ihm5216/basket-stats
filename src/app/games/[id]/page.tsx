@@ -1712,7 +1712,7 @@ function FinishedGameView({ game, players, statsMap, scoreEvents, oppPlayerList,
   return (
     <div className="min-h-screen flex flex-col">
       {/* ヘッダー */}
-      <div className="border-b border-[var(--card-border)] px-4 py-4">
+      <div className="border-b border-[var(--card-border)] px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
         <div className="flex items-center justify-between">
           <Link href={`/teams/${game.team_id}`} className="text-[var(--muted)] text-sm print:hidden">← 戻る</Link>
           <div className="flex items-center gap-2 print:hidden">
@@ -2022,7 +2022,7 @@ function CourtSetup({ players, oppPlayers, currentQuarter, onConfirm, initialIds
   return (
     <div className="min-h-screen flex flex-col">
       <div className="sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--card-border)]">
-        <div className="px-4 py-3 flex items-center justify-between">
+        <div className="px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex items-center justify-between">
           <div>
             <div className="font-bold text-white text-lg">{currentQuarter <= 4 ? `Q${currentQuarter}` : `OT${currentQuarter - 4}`} スターター</div>
             <div className="text-xs text-[var(--muted)]">

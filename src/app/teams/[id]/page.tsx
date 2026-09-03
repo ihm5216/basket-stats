@@ -214,7 +214,7 @@ export default function TeamPage() {
 
   return (
     <div className="min-h-screen">
-      <nav className="flex items-center gap-2 px-4 py-3 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
+      <nav className="flex items-center gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
         <Link href="/dashboard" className="flex items-center gap-2 text-white min-w-0 flex-1">
           <span className="flex-shrink-0">←</span>
           <span className="font-bold truncate">🏀 {team.name}</span>

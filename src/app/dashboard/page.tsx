@@ -130,7 +130,7 @@ function DashboardContent() {
   return (
     <div className="min-h-screen">
       {/* ナビゲーション */}
-      <nav className="flex items-center justify-between px-4 py-3 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
+      <nav className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 border-b border-[var(--card-border)] sticky top-0 bg-[var(--background)] z-10">
         <div className="flex items-center gap-2">
           <span className="text-xl">🏀</span>
           <span className="font-bold text-white">BasketStats</span>
