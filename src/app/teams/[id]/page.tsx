@@ -60,6 +60,10 @@ export default function TeamPage() {
     setTeam(teamData)
     setPlayers(playersData ?? [])
     setGames(gamesData ?? [])
+    // 作りたてのチーム（選手0人）は「選手」タブに着地させる。
+    // 試合タブに落とすと選手0人のまま試合登録に進んでしまい、そこで離脱する。
+    // loadData はマウント時のみ実行されるので、ユーザーが手で切り替えたタブを奪わない。
+    if ((playersData ?? []).length === 0) setTab('players')
 
     const owner = !!user && teamData.user_id === user.id
     setIsOwner(owner)
@@ -291,10 +295,18 @@ export default function TeamPage() {
               <Link href={`/games/new?team=${id}`} className="btn-primary text-sm py-2 px-4">試合を登録</Link>
             </div>
             {games.length === 0 ? (
-              <div className="card text-center py-12">
-                <p className="text-[var(--muted)] mb-4">試合がまだありません</p>
-                <Link href={`/games/new?team=${id}`} className="btn-primary">最初の試合を登録する</Link>
-              </div>
+              players.length === 0 ? (
+                <div className="card text-center py-12">
+                  <p className="text-[var(--muted)] mb-1">まだ選手が登録されていません</p>
+                  <p className="text-xs text-[var(--muted)] mb-4">先に選手を登録すると、試合の記録がすぐ始められます！</p>
+                  <button onClick={() => setTab('players')} className="btn-primary">選手を登録する</button>
+                </div>
+              ) : (
+                <div className="card text-center py-12">
+                  <p className="text-[var(--muted)] mb-4">試合がまだありません</p>
+                  <Link href={`/games/new?team=${id}`} className="btn-primary">最初の試合を登録する</Link>
+                </div>
+              )
             ) : (
               <div className="flex flex-col gap-3">
                 {games.map(game => (
@@ -331,10 +343,20 @@ export default function TeamPage() {
         {/* 選手タブ */}
         {tab === 'players' && (
           <div>
-            <h2 className="font-semibold text-white mb-4">選手登録</h2>
+            {players.length === 0 ? (
+              <div className="mb-4 rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-4">
+                <div className="text-base font-bold text-white">まずは選手を登録しましょう🏀</div>
+                <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">
+                  メンバー表や公式記録用紙を撮るだけで、全員まとめて登録できます！<br />
+                  1人ずつ手入力してもOK。登録がすんだら、そのまま試合の記録に進めます。
+                </p>
+              </div>
+            ) : (
+              <h2 className="font-semibold text-white mb-4">選手登録</h2>
+            )}
 
-            {/* 写真から一括登録 */}
-            <div className="card mb-4">
+            {/* 写真から一括登録（選手0人のときは枠を強調して最初に目に入るようにする） */}
+            <div className={`card mb-4 ${players.length === 0 ? 'border-orange-500/50' : ''}`}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-white">📷 写真から一括登録</div>
@@ -443,9 +465,7 @@ export default function TeamPage() {
               {addError && <p className="text-xs text-red-400">⚠ {addError}</p>}
             </form>
 
-            {players.length === 0 ? (
-              <div className="card text-center py-8 text-[var(--muted)]">選手を追加してください</div>
-            ) : (
+            {players.length === 0 ? null : (
               <div className="flex flex-col gap-2">
                 {players.map(player => (
                   <div key={player.id} className="card flex items-center justify-between py-3 gap-2">
