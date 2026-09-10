@@ -934,7 +934,7 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
           </div>
 
           <div className="mt-3">
-            <PlayerTrendChart points={trend} unit={metricDef.unit} />
+            <PlayerTrendChart points={trend} unit={metricDef.unit} label={metricDef.label} />
           </div>
 
           {trendSummary && (

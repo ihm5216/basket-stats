@@ -38,14 +38,33 @@ function shortDate(iso: string): string {
 export default function PlayerTrendChart({
   points,
   unit,
+  label,
 }: {
   points: TrendPoint[]
   unit: string
+  label: string
 }) {
   if (points.length === 0) {
     return (
       <div className="py-10 text-center text-sm" style={{ color: COLOR_TEXT }}>
         まだ終了した試合の記録がありません
+      </div>
+    )
+  }
+
+  // 全試合0のときは折れ線を描かない。値が0だと線が0のグリッド線に重なり、
+  // 横軸そのものに見えて描画バグのようになるため。
+  // このアプリは「押さなければ0のまま集計される」設計なので、得点しか押して
+  // いないチームでは AST/REB/STL が全試合0になるのはむしろ普通の状態。
+  if (points.every(p => p.value === 0)) {
+    return (
+      <div className="py-8 text-center">
+        <div className="text-sm font-bold" style={{ color: '#e8f4fd' }}>
+          {label}は、この期間すべて0でした
+        </div>
+        <div className="mt-1 text-xs" style={{ color: COLOR_TEXT }}>
+          終了した{points.length}試合ぶん
+        </div>
       </div>
     )
   }
