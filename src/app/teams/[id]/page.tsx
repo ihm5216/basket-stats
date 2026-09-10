@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Team, Player, Game } from '@/types'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { exportToCSV, aggregateSeasonStats } from '@/lib/stats'
+import { exportToCSV, aggregateSeasonStats, buildPlayerTrend, summarizeTrend, TREND_METRICS, type TrendMetric } from '@/lib/stats'
+import PlayerTrendChart from '@/components/PlayerTrendChart'
 
 function toHankaku(str: string): string {
   return str.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
@@ -809,6 +810,9 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
   const [loading, setLoading] = useState(true)
   const [allStats, setAllStats] = useState<Parameters<typeof aggregateSeasonStats>[0]>([])
   const [filterMonth, setFilterMonth] = useState<string>('all')
+  // 成長グラフ（選択中の選手と指標）
+  const [metric, setMetric] = useState<TrendMetric>('points')
+  const [pickedPlayerId, setPickedPlayerId] = useState<string>('')
 
   // 月ごとのオプション生成（試合のある月のみ）
   const monthOptions = Array.from(
@@ -817,6 +821,15 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
 
   // フィルター適用後の試合
   const filteredGames = filterMonth === 'all' ? games : games.filter(g => g.game_date.startsWith(filterMonth))
+
+  // 期間フィルターで選手が消えることがあるので、選択が無効になったら先頭（平均得点トップ）に戻す。
+  // effect ではなく描画時に解決することで、state更新の連鎖を避ける。
+  const activePlayerId = stats.some(s => s.player_id === pickedPlayerId)
+    ? pickedPlayerId
+    : (stats[0]?.player_id ?? '')
+  const metricDef = TREND_METRICS.find(m => m.key === metric) ?? TREND_METRICS[0]
+  const trend = activePlayerId ? buildPlayerTrend(allStats, filteredGames, activePlayerId, metric) : []
+  const trendSummary = summarizeTrend(trend)
 
   useEffect(() => {
     async function load() {
@@ -874,6 +887,82 @@ function SeasonStatsTab({ teamId, games }: { teamId: string; games: Game[] }) {
           </button>
         ))}
       </div>
+      {/* ===== 成長グラフ ===== */}
+      {stats.length > 0 && (
+        <div className="card mb-6">
+          <div className="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
+            <h2 className="font-semibold text-white">📈 成長グラフ</h2>
+            <span className="text-[10px] text-[var(--muted)]">終了した試合のみ</span>
+          </div>
+
+          {/* 選手を選ぶ（横スクロール） */}
+          <div className="flex gap-1.5 overflow-x-auto pb-2">
+            {stats.map(s => {
+              const active = s.player_id === activePlayerId
+              return (
+                <button
+                  key={s.player_id}
+                  onClick={() => setPickedPlayerId(s.player_id)}
+                  className="flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
+                  style={active
+                    ? { background: 'rgba(238,122,47,0.18)', borderColor: 'rgba(238,122,47,0.7)', color: '#f0a04b' }
+                    : { background: 'var(--card)', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
+                >
+                  #{s.player_number} {s.player_name}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* 指標を選ぶ */}
+          <div className="grid grid-cols-4 gap-1.5 mt-2">
+            {TREND_METRICS.map(m => {
+              const active = m.key === metric
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => setMetric(m.key)}
+                  className="rounded-lg border py-1.5 text-[11px] font-bold transition-colors"
+                  style={active
+                    ? { background: 'rgba(238,122,47,0.18)', borderColor: 'rgba(238,122,47,0.7)', color: '#f0a04b' }
+                    : { background: 'transparent', borderColor: 'var(--card-border)', color: 'var(--muted)' }}
+                >
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-3">
+            <PlayerTrendChart points={trend} unit={metricDef.unit} />
+          </div>
+
+          {trendSummary && (
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              <div className="rounded-lg py-2 text-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="text-[10px] text-[var(--muted)]">平均</div>
+                <div className="text-sm font-bold text-white">{trendSummary.avg}{metricDef.unit}</div>
+              </div>
+              <div className="rounded-lg py-2 text-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="text-[10px] text-[var(--muted)]">自己最高</div>
+                <div className="text-sm font-bold text-white">{trendSummary.best}{metricDef.unit}</div>
+              </div>
+              <div className="rounded-lg py-2 text-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="text-[10px] text-[var(--muted)]">直近3試合</div>
+                <div className="text-sm font-bold text-white">
+                  {trendSummary.recentAvg}{metricDef.unit}
+                  {trendSummary.games >= 4 && trendSummary.delta !== 0 && (
+                    <span className={`ml-1 text-[10px] ${trendSummary.delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {trendSummary.delta > 0 ? '▲' : '▼'}{Math.abs(trendSummary.delta)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <h2 className="font-semibold text-white mb-4">
         シーズン統計（{filteredGames.length}試合）
         {filteredGames.some(g => !g.is_finished) && (
