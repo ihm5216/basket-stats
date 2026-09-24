@@ -1371,7 +1371,7 @@ function JBASheet({ game, players, statsMap, scoreEvents, oppPlayerList, gameId,
             <div style={{marginBottom:16}}>
               <div style={{fontSize:11, fontWeight:'bold', color:'#555', marginBottom:4}}>種別（得点）</div>
               <div style={{display:'flex', gap:6}}>
-                {([2,3,1] as const).filter(pts => category !== 'mini' || pts !== 3).map(pts => (
+                {([2,3,1] as const).map(pts => (
                   <button key={pts} onClick={() => setAddPoints(pts)} style={{flex:1, padding:'6px', borderRadius:6, border:'2px solid', borderColor: addPoints===pts ? '#ee7a2f' : '#ccc', background: addPoints===pts ? '#fdeeda' : '#f5f5f5', fontWeight: addPoints===pts ? 'bold' : 'normal', cursor:'pointer', fontSize:12}}>
                     {pts === 1 ? 'FT（1点）' : pts === 2 ? '2P（2点）' : '3P（3点）'}
                   </button>
@@ -3511,9 +3511,7 @@ export default function GamePage() {
             <span className="text-xs text-[var(--muted)] w-14 text-center">相手 {game.opponent_score}</span>
             <button onClick={() => updateOpponentScore(1)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+1</button>
             <button onClick={() => updateOpponentScore(2)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+2</button>
-            {category !== 'mini' && (
-              <button onClick={() => updateOpponentScore(3)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+3</button>
-            )}
+            <button onClick={() => updateOpponentScore(3)} className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--card-border)] text-white font-bold text-sm">+3</button>
           </div>
           <div className="flex gap-1.5 items-center">
             <div className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamFouls >= 5 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-[var(--card)] text-[var(--muted)]'}`}>
@@ -3774,7 +3772,7 @@ export default function GamePage() {
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0 text-[10px] text-[var(--muted)] mt-1">
                   <span>2P {oppStat.fg2_made}/{oppStat.fg2_attempt}</span>
-                  {category !== 'mini' && <span>3P {oppStat.fg3_made}/{oppStat.fg3_attempt}</span>}
+                  <span>3P {oppStat.fg3_made}/{oppStat.fg3_attempt}</span>
                   <span>FT {oppStat.ft_made}/{oppStat.ft_attempt}</span>
                   <span>REB {oppStat.rebounds}</span>
                   <span>AST {oppStat.assists}</span>
@@ -3789,8 +3787,7 @@ export default function GamePage() {
           {/* スタッツ入力 / 相手得点ボタン */}
           {selectedPlayer ? (
             <div className="grid grid-cols-3 gap-2">
-              {/* ミニバス（U12）は3Pシュートなし */}
-              {STAT_BUTTONS.filter(btn => category !== 'mini' || (btn.key !== 'fg3_made' && btn.key !== 'fg3_attempt')).map(btn => (
+              {STAT_BUTTONS.map(btn => (
                 <button key={btn.key + btn.label} onClick={() => handleStatTap(btn)} className={`stat-btn ${btn.category}`}>
                   <span>{btn.label}</span>
                 </button>
@@ -3799,7 +3796,7 @@ export default function GamePage() {
           ) : selectedOppPlayer ? (
             // 相手も自チームと同じボタン。得点だけ押す使い方でもOK（他は0のまま集計される）
             <div className="grid grid-cols-3 gap-2">
-              {STAT_BUTTONS.filter(btn => category !== 'mini' || (btn.key !== 'fg3_made' && btn.key !== 'fg3_attempt')).map(btn => (
+              {STAT_BUTTONS.map(btn => (
                 <button key={btn.key + btn.label} onClick={() => recordOppStatTap(btn)} className={`stat-btn ${btn.category}`}>
                   <span>{btn.label}</span>
                 </button>

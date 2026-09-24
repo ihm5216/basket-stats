@@ -274,7 +274,7 @@ export default function TeamPage() {
                   )
                 })}
                 <span className="text-[10px] text-[var(--muted)]">
-                  （ミニバス＝6分Q・3Pなし・タイムアウト各Q1回）
+                  （ミニバス＝6分Q・タイムアウト各Q1回）
                 </span>
               </div>
             )}

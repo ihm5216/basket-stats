@@ -106,7 +106,7 @@ export default function NewTeamPage() {
           <div className="grid grid-cols-2 gap-2">
             {([
               { key: 'general', label: '一般 / 中高', sub: 'U15以上・10分Q・タイムアウト 前半2/後半3' },
-              { key: 'mini', label: 'ミニバス', sub: 'U12・6分Q・3Pなし・タイムアウト 各Q1回' },
+              { key: 'mini', label: 'ミニバス', sub: 'U12・6分Q・タイムアウト 各Q1回' },
             ] as const).map(opt => (
               <button
                 key={opt.key}
@@ -123,7 +123,7 @@ export default function NewTeamPage() {
             ))}
           </div>
           <p className="text-[10px] mt-1.5" style={{ color: 'var(--muted)' }}>
-            ※ ルール（クォーター時間・3P有無・タイムアウト・公式スコアシート）が切り替わります。あとから変更も可能です。
+            ※ ルール（クォーター時間・タイムアウト・公式スコアシート）が切り替わります。あとから変更も可能です。
           </p>
         </div>
 
