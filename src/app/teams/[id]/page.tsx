@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { exportToCSV, aggregateSeasonStats, buildPlayerTrend, summarizeTrend, TREND_METRICS, type TrendMetric } from '@/lib/stats'
 import PlayerTrendChart from '@/components/PlayerTrendChart'
+import HowToVideo from '@/components/HowToVideo'
 
 function toHankaku(str: string): string {
   return str.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
@@ -345,12 +346,15 @@ export default function TeamPage() {
         {tab === 'players' && (
           <div>
             {players.length === 0 ? (
-              <div className="mb-4 rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-4">
-                <div className="text-base font-bold text-white">まずは選手を登録しましょう🏀</div>
-                <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">
-                  メンバー表や公式記録用紙を撮るだけで、全員まとめて登録できます！<br />
-                  1人ずつ手入力してもOK。登録がすんだら、そのまま試合の記録に進めます。
-                </p>
+              <div className="mb-4 flex items-start gap-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-bold text-white">まずは選手を登録しましょう🏀</div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)]">
+                    メンバー表や公式記録用紙を撮るだけで、全員まとめて登録できます！<br />
+                    1人ずつ手入力してもOK。登録がすんだら、そのまま試合の記録に進めます。
+                  </p>
+                </div>
+                <HowToVideo src="/howto/howto-photo-register.mp4" poster="/howto/howto-photo-register.jpg" label="13秒で見る" />
               </div>
             ) : (
               <h2 className="font-semibold text-white mb-4">選手登録</h2>
