@@ -530,46 +530,29 @@ const pains = [
 ]
 
 // 各ステップの操作イメージ（実UIを模したミニモックアップ・選手名はダミー）
+// 実際の操作を音なしでループ再生する。字幕は動画に焼き込み済み
+function StepVideo({ src, poster, label }: { src: string; poster: string; label: string }) {
+  return (
+    <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-[#1a3a56] bg-[#0b1725] md:mx-0">
+      <video
+        src={src}
+        poster={poster}
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-label={label}
+        className="block aspect-[9/16] w-full"
+      />
+    </div>
+  )
+}
+
 const stepVisuals = [
-  // ① 選手登録フォーム風
-  <div key="v1" className="w-full rounded-xl border border-[#f0e2cf] bg-[#fffdf9] p-2.5">
-    {[
-      ['4', '佐藤 蓮'],
-      ['5', '鈴木 大翔'],
-      ['6', '高橋 陽向'],
-    ].map(([no, name]) => (
-      <div key={no} className="mb-1.5 flex items-center gap-2 rounded-lg border border-[#f0e2cf] bg-white px-2.5 py-1.5">
-        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-md bg-[#fdeeda] text-[10px] font-black text-[#c85a14]">{no}</span>
-        <span className="text-[11px] font-bold text-[#4c4033]">{name}</span>
-      </div>
-    ))}
-    <div className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-[#e0b287] py-1.5 text-[10.5px] font-bold text-[#c85a14]">
-      ＋ 選手を追加
-    </div>
-  </div>,
-  // ② 試合中の記録画面風（実アプリと同じダーク基調）
-  <div key="v2" className="w-full rounded-xl border border-[#1a3a56] bg-[#0d2235] p-2.5">
-    <div className="mb-2 flex gap-1.5">
-      {['#4', '#5', '#7'].map((n, j) => (
-        <span
-          key={n}
-          className={`rounded-md px-2 py-1 text-[10px] font-black ${j === 0 ? 'bg-[#ee7a2f] text-white' : 'bg-[#13314b] text-[#6ba8c8]'}`}
-        >
-          {n}
-        </span>
-      ))}
-    </div>
-    <div className="grid grid-cols-3 gap-1.5">
-      {['2P成功', '3P成功', 'FT成功', 'REB', 'AST', 'ファウル'].map((b, j) => (
-        <span
-          key={b}
-          className={`rounded-lg py-1.5 text-center text-[10px] font-bold ${j === 0 ? 'bg-[#ee7a2f] text-white' : 'bg-[#13314b] text-[#d3e2f5]'}`}
-        >
-          {b}
-        </span>
-      ))}
-    </div>
-  </div>,
+  // ① 写真で選手登録（実際の操作動画）
+  <StepVideo key="v1" src="/howto/howto-photo-register.mp4" poster="/howto/howto-photo-register.jpg" label="メンバー表を撮って選手を一括登録する操作の動画" />,
+  // ② 試合中の記録（実際の操作動画）
+  <StepVideo key="v2" src="/howto/howto-record.mp4" poster="/howto/howto-record.jpg" label="選手をタップして2P成功・3P成功を記録し、スコアシートに反映される操作の動画" />,
   // ③ LINE共有風
   <div key="v3" className="w-full rounded-xl bg-[#8cabd8] p-2.5">
     <div className="ml-auto w-[85%] rounded-xl rounded-tr-sm bg-[#8de055] p-1.5">
